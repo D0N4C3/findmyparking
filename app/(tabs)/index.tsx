@@ -30,7 +30,7 @@ import {
   Modal,
   TextInput
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
@@ -74,6 +74,7 @@ interface TimerModalProps {
 }
 
 function TimerModal({ visible, onClose, onSetTimer, colors }: TimerModalProps) {
+  const insets = useSafeAreaInsets();
   const [minutes, setMinutes] = useState('60');
 
   const handleSet = () => {
@@ -94,7 +95,7 @@ function TimerModal({ visible, onClose, onSetTimer, colors }: TimerModalProps) {
       onRequestClose={onClose}
     >
       <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-        <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+        <View style={[styles.modalContent, { backgroundColor: colors.card, marginBottom: Math.max(insets.bottom, 12) }]}>
           <View style={styles.modalHeader}>
             <Timer size={24} color={colors.accent} />
             <Text style={[styles.modalTitle, { color: colors.text }]}>
@@ -162,6 +163,7 @@ interface NoteModalProps {
 }
 
 function NoteModal({ visible, onClose, onSave, initialNote, colors }: NoteModalProps) {
+  const insets = useSafeAreaInsets();
   const [note, setNote] = useState(initialNote || '');
 
   useEffect(() => {
@@ -176,7 +178,7 @@ function NoteModal({ visible, onClose, onSave, initialNote, colors }: NoteModalP
       onRequestClose={onClose}
     >
       <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-        <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+        <View style={[styles.modalContent, { backgroundColor: colors.card, marginBottom: Math.max(insets.bottom, 12) }]}>
           <Text style={[styles.modalTitle, { color: colors.text }]}>Add Note</Text>
           <TextInput
             style={[
@@ -221,6 +223,7 @@ export default function HomeScreen() {
     updateParkingSpot,
   } = useParking();
   const { isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const colors = isDark ? Colors.dark : Colors.light;
   const router = useRouter();
   const { showError } = useDialog();
@@ -335,7 +338,7 @@ export default function HomeScreen() {
 
       <ScrollView 
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 124 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Main Status Card */}
@@ -555,11 +558,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingBottom: 100,
   },
   mainCard: {
     borderRadius: 28,
-    padding: 24,
+    padding: 26,
     marginTop: 4,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.12,
@@ -667,12 +669,13 @@ const styles = StyleSheet.create({
   },
   quickActions: {
     flexDirection: 'row',
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 10,
   },
   quickAction: {
-    flex: 1,
+    width: '48%',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 12,
     gap: 4,
   },

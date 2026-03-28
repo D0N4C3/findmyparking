@@ -17,6 +17,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.interethiopia.findmyparking",
       "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "ParkPing needs your location to save your parking spot and guide you back to your car.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ParkPing uses background location to support optional car auto-detection and reminders.",
+        "NSUserNotificationUsageDescription": "ParkPing sends parking reminders and timer alerts.",
         "NSBluetoothAlwaysUsageDescription": "ParkPing uses Bluetooth to detect when your car disconnects so it can save your parking location.",
         "NSBluetoothPeripheralUsageDescription": "ParkPing uses Bluetooth to detect when your car disconnects so it can save your parking location."
       }
@@ -28,6 +31,10 @@
       },
       "package": "com.interethiopia.findmyparking",
       "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.POST_NOTIFICATIONS",
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT"
       ]
@@ -38,6 +45,13 @@
     "plugins": [
       "expo-router",
       "expo-font",
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      "expo-notifications",
       "expo-dev-client",
       "expo-web-browser"
     ],

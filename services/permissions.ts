@@ -129,7 +129,7 @@ export const orchestrateStartupPermissions = async ({
   let statuses = await getPermissionStatuses();
   const nextAskedState: StartupPermissionAskedState = { ...askedState };
 
-  if (statuses.location.foreground !== 'granted' && !nextAskedState.locationForeground) {
+  if (statuses.location.foreground !== 'granted') {
     nextAskedState.locationForeground = true;
     await Location.requestForegroundPermissionsAsync();
     statuses = await getPermissionStatuses();
@@ -139,20 +139,20 @@ export const orchestrateStartupPermissions = async ({
     needsBackgroundLocation &&
     statuses.location.foreground === 'granted' &&
     statuses.location.background !== 'granted' &&
-    !nextAskedState.locationBackground
+    Platform.OS === 'android'
   ) {
     nextAskedState.locationBackground = true;
     await Location.requestBackgroundPermissionsAsync();
     statuses = await getPermissionStatuses();
   }
 
-  if (statuses.bluetooth !== 'granted' && !nextAskedState.bluetooth) {
+  if (statuses.bluetooth !== 'granted') {
     nextAskedState.bluetooth = true;
     await requestBluetoothPermissions();
     statuses = await getPermissionStatuses();
   }
 
-  if (statuses.notifications !== 'granted' && !nextAskedState.notifications) {
+  if (statuses.notifications !== 'granted' && statuses.notifications !== 'limited') {
     nextAskedState.notifications = true;
     await Notifications.requestPermissionsAsync();
     statuses = await getPermissionStatuses();
