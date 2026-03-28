@@ -23,10 +23,11 @@ import {
   Animated,
   Share,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Component, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -58,6 +59,68 @@ interface RouteStep {
   maneuver: string;
 }
 
+interface MapRenderBoundaryProps {
+  colors: typeof Colors.light;
+  onRetry: () => void;
+  onOpenExternalMaps: () => void;
+  onDiagnostics: () => void;
+  children: ReactNode;
+}
+
+interface MapRenderBoundaryState {
+  hasError: boolean;
+}
+
+class MapRenderBoundary extends Component<MapRenderBoundaryProps, MapRenderBoundaryState> {
+  state: MapRenderBoundaryState = {
+    hasError: false,
+  };
+
+  static getDerivedStateFromError(): MapRenderBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[MapScreen] map-subtree-crash', {
+      errorName: error.name,
+      errorMessage: error.message,
+      componentStack: errorInfo.componentStack,
+    });
+  }
+
+  render() {
+    const { hasError } = this.state;
+    const { colors, children, onRetry, onOpenExternalMaps, onDiagnostics } = this.props;
+
+    if (!hasError) {
+      return children;
+    }
+
+    return (
+      <View style={[styles.mapFallbackCard, { backgroundColor: colors.card }]}>
+        <Text style={[styles.mapFallbackTitle, { color: colors.text }]}>Map crashed safely</Text>
+        <Text style={[styles.mapFallbackSubtitle, { color: colors.textSecondary }]}>
+          We could not render the in-app map. You can keep using navigation options below.
+        </Text>
+        <View style={styles.mapFallbackActions}>
+          <AppButton colors={colors} label="Open external maps" onPress={onOpenExternalMaps} variant="primary" />
+          <AppButton colors={colors} label="Retry map" onPress={onRetry} variant="secondary" />
+          <AppButton colors={colors} label="Diagnostics" onPress={onDiagnostics} variant="ghost" />
+        </View>
+      </View>
+    );
+  }
+}
+
+function logMapEvent(event: string, details: Record<string, unknown>) {
+  console.info('[MapScreenTelemetry]', {
+    event,
+    screen: 'map',
+    ...details,
+    timestamp: new Date().toISOString(),
+  });
+}
+
 export default function MapScreen() {
   const { 
     currentParking, 
@@ -80,6 +143,9 @@ export default function MapScreen() {
   const slideAnim = useRef(new Animated.Value(100)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const navigationInterval = useRef<NodeJS.Timeout | null>(null);
+  const [mapBoundaryKey, setMapBoundaryKey] = useState(0);
+  const didLogRenderPath = useRef(false);
+  const didLogMount = useRef(false);
 
   useEffect(() => {
     Animated.timing(slideAnim, {
@@ -301,6 +367,73 @@ export default function MapScreen() {
 
   const canRenderUrlTiles = Platform.OS === 'web' && typeof UrlTile !== 'undefined';
   const canRenderMapView = typeof MapView !== 'undefined';
+  const canRenderMarkers = typeof Marker !== 'undefined';
+  const canRenderPolyline = typeof Polyline !== 'undefined';
+  const canRenderAdvancedFeatures = canRenderMapView && canRenderMarkers;
+
+  const mapDiagnostics = useMemo(() => ({
+    os: Platform.OS,
+    canRenderMapView,
+    canRenderMarkers,
+    canRenderPolyline,
+    canRenderUrlTiles,
+    hasCurrentParking: Boolean(currentParking),
+    hasCurrentLocation: Boolean(currentLocation),
+  }), [canRenderMapView, canRenderMarkers, canRenderPolyline, canRenderUrlTiles, currentLocation, currentParking]);
+
+  useEffect(() => {
+    if (!didLogMount.current) {
+      didLogMount.current = true;
+      logMapEvent('map-screen-mounted', mapDiagnostics);
+    }
+  }, [mapDiagnostics]);
+
+  useEffect(() => {
+    if (!didLogRenderPath.current) {
+      didLogRenderPath.current = true;
+      logMapEvent('map-first-render-path', {
+        ...mapDiagnostics,
+        renderPath: canRenderMapView ? 'native-map' : 'fallback-card',
+      });
+    }
+  }, [canRenderMapView, mapDiagnostics]);
+
+  const handleOpenExternalMaps = useCallback(() => {
+    const targetLat = currentParking?.latitude ?? currentLocation?.coords.latitude;
+    const targetLon = currentParking?.longitude ?? currentLocation?.coords.longitude;
+    if (typeof targetLat !== 'number' || typeof targetLon !== 'number') {
+      showError('Map unavailable', 'We could not determine a map destination to open.');
+      return;
+    }
+    const label = currentParking ? 'Parked Car' : 'Current Location';
+    const mapsUrl = Platform.select({
+      ios: `http://maps.apple.com/?ll=${targetLat},${targetLon}&q=${encodeURIComponent(label)}`,
+      android: `geo:${targetLat},${targetLon}?q=${targetLat},${targetLon}(${encodeURIComponent(label)})`,
+      default: `https://maps.google.com/?q=${targetLat},${targetLon}`,
+    });
+    if (!mapsUrl) {
+      showError('Map unavailable', 'External maps are not supported on this platform.');
+      return;
+    }
+    logMapEvent('open-external-maps', { ...mapDiagnostics, mapsUrl });
+    void Linking.openURL(mapsUrl).catch((error: unknown) => {
+      console.error('[MapScreen] external-maps-open-failed', { error });
+      showError('Unable to open maps', 'Please try again in a moment.');
+    });
+  }, [currentLocation?.coords.latitude, currentLocation?.coords.longitude, currentParking, mapDiagnostics, showError]);
+
+  const handleRetryMapRender = useCallback(() => {
+    logMapEvent('map-retry-requested', mapDiagnostics);
+    setMapBoundaryKey(prev => prev + 1);
+  }, [mapDiagnostics]);
+
+  const handleMapDiagnostics = useCallback(() => {
+    logMapEvent('map-diagnostics', mapDiagnostics);
+    showError(
+      'Map diagnostics',
+      `OS: ${String(mapDiagnostics.os)}\nMapView: ${String(mapDiagnostics.canRenderMapView)}\nMarkers: ${String(mapDiagnostics.canRenderMarkers)}\nPolyline: ${String(mapDiagnostics.canRenderPolyline)}\nUrlTile: ${String(mapDiagnostics.canRenderUrlTiles)}`
+    );
+  }, [mapDiagnostics, showError]);
 
   const initialRegion = currentLocation ? {
     latitude: currentLocation.coords.latitude,
@@ -332,43 +465,52 @@ export default function MapScreen() {
 
       {/* Map */}
       <View style={styles.mapContainer}>
-        {canRenderMapView ? (
-        <MapView
-          ref={mapRef}
-          style={styles.map}
-          provider={PROVIDER_DEFAULT}
-          initialRegion={initialRegion}
-          showsUserLocation={Platform.OS !== 'web'}
-          showsMyLocationButton={false}
-          showsCompass={false}
-          rotateEnabled
-          pitchEnabled
-          mapType={mapType}
-          customMapStyle={isDark ? darkMapStyle : []}
+        <MapRenderBoundary
+          key={mapBoundaryKey}
+          colors={colors}
+          onRetry={handleRetryMapRender}
+          onOpenExternalMaps={handleOpenExternalMaps}
+          onDiagnostics={handleMapDiagnostics}
         >
-          {canRenderUrlTiles && (
-            <UrlTile
-              urlTemplate={colors.mapTile}
-              maximumZ={19}
-              flipY={false}
-            />
-          )}
-          {currentParking && (
-            <>
-              <Marker
-                coordinate={{
-                  latitude: currentParking.latitude,
-                  longitude: currentParking.longitude,
-                }}
-                title="Your Car"
-                description="Parked here"
-              >
-                <View style={[styles.carMarker, { backgroundColor: colors.accent }]}>
-                  <Car size={20} color="#FFFFFF" />
-                </View>
-              </Marker>
-
-              {currentLocation && (
+          {canRenderMapView ? (
+            <MapView
+              ref={mapRef}
+              style={styles.map}
+              provider={PROVIDER_DEFAULT}
+              initialRegion={initialRegion}
+              showsUserLocation={Platform.OS !== 'web'}
+              showsMyLocationButton={false}
+              showsCompass={false}
+              rotateEnabled={canRenderAdvancedFeatures}
+              pitchEnabled={canRenderAdvancedFeatures}
+              mapType={mapType}
+              customMapStyle={isDark ? darkMapStyle : []}
+              onMapReady={() => {
+                logMapEvent('map-ready', mapDiagnostics);
+              }}
+            >
+              {canRenderUrlTiles && (
+                <UrlTile
+                  urlTemplate={colors.mapTile}
+                  maximumZ={19}
+                  flipY={false}
+                />
+              )}
+              {canRenderMarkers && currentParking && (
+                <Marker
+                  coordinate={{
+                    latitude: currentParking.latitude,
+                    longitude: currentParking.longitude,
+                  }}
+                  title="Your Car"
+                  description="Parked here"
+                >
+                  <View style={[styles.carMarker, { backgroundColor: colors.accent }]}>
+                    <Car size={20} color="#FFFFFF" />
+                  </View>
+                </Marker>
+              )}
+              {canRenderPolyline && currentParking && currentLocation && (
                 <Polyline
                   coordinates={[
                     {
@@ -385,17 +527,16 @@ export default function MapScreen() {
                   lineDashPattern={[8, 6]}
                 />
               )}
-            </>
+            </MapView>
+          ) : (
+            <View style={[styles.webMapFallback, { backgroundColor: colors.surfaceSecondary }]}>
+              <Text style={[styles.webMapFallbackTitle, { color: colors.text }]}>Map preview unavailable</Text>
+              <Text style={[styles.webMapFallbackSubtitle, { color: colors.textSecondary }]}>
+                The current platform does not support map rendering in this build.
+              </Text>
+            </View>
           )}
-        </MapView>
-        ) : (
-          <View style={[styles.webMapFallback, { backgroundColor: colors.surfaceSecondary }]}>
-            <Text style={[styles.webMapFallbackTitle, { color: colors.text }]}>Map preview unavailable</Text>
-            <Text style={[styles.webMapFallbackSubtitle, { color: colors.textSecondary }]}>
-              The current platform does not support map rendering in this build.
-            </Text>
-          </View>
-        )}
+        </MapRenderBoundary>
 
         {/* Map Controls */}
         <View style={styles.mapControls}>
@@ -637,6 +778,25 @@ const styles = StyleSheet.create({
   webMapFallbackSubtitle: {
     fontSize: 14,
     textAlign: 'center',
+  },
+  mapFallbackCard: {
+    flex: 1,
+    borderRadius: 20,
+    margin: 16,
+    padding: 20,
+    justifyContent: 'center',
+    gap: 14,
+  },
+  mapFallbackTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  mapFallbackSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  mapFallbackActions: {
+    gap: 10,
   },
   mapControls: {
     position: 'absolute',
