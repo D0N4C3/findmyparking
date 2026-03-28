@@ -32,7 +32,10 @@ import {
   Switch,
   Linking,
   Animated,
-  Share
+  Share,
+  ActivityIndicator,
+  Modal,
+  Pressable
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -42,14 +45,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { AppCard, SectionHeader } from '@/components/ui/primitives';
 import { useDialog } from '@/context/DialogContext';
 import { DIALOG_COPY } from '@/constants/dialogs';
-
-// Mock Bluetooth devices for demo
-const MOCK_BLUETOOTH_DEVICES: CarBluetoothDevice[] = [
-  { id: '1', name: 'Honda Civic', address: '00:00:00:00:00:01' },
-  { id: '2', name: 'Toyota Corolla', address: '00:00:00:00:00:02' },
-  { id: '3', name: 'BMW X5', address: '00:00:00:00:00:03' },
-  { id: '4', name: 'Tesla Model 3', address: '00:00:00:00:00:04' },
-];
+import { BluetoothScanResult, scanBluetoothDevices } from '@/services/bluetooth';
 
 interface SettingItemProps {
   icon: React.ReactNode;
@@ -141,10 +137,13 @@ export default function SettingsScreen() {
     requestNotificationAccess,
   } = useParking();
   const { isDark, theme, setTheme } = useTheme();
-  const { showDestructive, showError, showConfirm, showPicker } = useDialog();
+  const { showDestructive, showError, showConfirm } = useDialog();
   const colors = isDark ? Colors.dark : Colors.light;
   
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [isBluetoothModalVisible, setIsBluetoothModalVisible] = useState(false);
+  const [isScanningBluetooth, setIsScanningBluetooth] = useState(false);
+  const [scanResult, setScanResult] = useState<BluetoothScanResult | null>(null);
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -155,52 +154,36 @@ export default function SettingsScreen() {
     }).start();
   }, [slideAnim]);
 
+  const runBluetoothScan = useCallback(async () => {
+    setIsScanningBluetooth(true);
+    setScanResult(null);
+
+    const result = await scanBluetoothDevices({
+      timeoutMs: 10_000,
+      retries: 1,
+    });
+
+    setScanResult(result);
+    setIsScanningBluetooth(false);
+  }, []);
+
   const handleSelectBluetoothDevice = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsBluetoothModalVisible(true);
+    void runBluetoothScan();
+  }, [runBluetoothScan]);
 
-    const pickerItems = [
-      {
-        id: DIALOG_COPY.actions.cancel.id,
-        label: DIALOG_COPY.actions.cancel.label,
-      },
-      ...MOCK_BLUETOOTH_DEVICES.map((device) => ({
-        id: device.id,
-        label: device.name,
-        subtitle: device.address,
-        selected: savedBluetoothDevice?.id === device.id,
-      })),
-      ...(savedBluetoothDevice
-        ? [
-            {
-              id: DIALOG_COPY.actions.removeDevice.id,
-              label: DIALOG_COPY.actions.removeDevice.label,
-              destructive: true,
-            },
-          ]
-        : []),
-    ];
+  const handleSelectScannedDevice = useCallback((device: CarBluetoothDevice) => {
+    setSavedBluetoothDevice(device);
+    setIsBluetoothModalVisible(false);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [setSavedBluetoothDevice]);
 
-    showPicker({
-      title: DIALOG_COPY.prompts.selectBluetooth.title,
-      message: DIALOG_COPY.prompts.selectBluetooth.message,
-      items: pickerItems,
-      onSelect: (selectionId) => {
-        if (selectionId === DIALOG_COPY.actions.cancel.id) return;
-
-        if (selectionId === DIALOG_COPY.actions.removeDevice.id) {
-          setSavedBluetoothDevice(null);
-          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          return;
-        }
-
-        const selected = MOCK_BLUETOOTH_DEVICES.find((device) => device.id === selectionId);
-        if (selected) {
-          setSavedBluetoothDevice(selected);
-          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        }
-      },
-    });
-  }, [savedBluetoothDevice, setSavedBluetoothDevice, showPicker]);
+  const handleRemoveSavedDevice = useCallback(() => {
+    setSavedBluetoothDevice(null);
+    setIsBluetoothModalVisible(false);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [setSavedBluetoothDevice]);
 
   const handleClearAllData = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -240,9 +223,20 @@ export default function SettingsScreen() {
   }, [showError]);
 
   const handleToggleAutoDetection = useCallback((value: boolean) => {
+    if (value && !savedBluetoothDevice) {
+      showConfirm({
+        title: 'Select a Bluetooth device first',
+        message: 'Pick your car Bluetooth device so ParkPing knows what to monitor.',
+        confirmLabel: 'Select Device',
+        onConfirm: handleSelectBluetoothDevice,
+      });
+      setAutoDetectionEnabled(false);
+      return;
+    }
+
     setAutoDetectionEnabled(value);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [setAutoDetectionEnabled]);
+  }, [handleSelectBluetoothDevice, savedBluetoothDevice, setAutoDetectionEnabled, showConfirm]);
 
   const handleToggleNotifications = useCallback((value: boolean) => {
     if (value) {
@@ -281,6 +275,10 @@ export default function SettingsScreen() {
     permissionStatuses.location.foreground === 'granted'
       ? permissionStatuses.location.background
       : permissionStatuses.location.foreground;
+  const scannedDevices = scanResult?.devices ?? [];
+  const hasScanError = Boolean(
+    scanResult && ['permission-denied', 'unsupported', 'error', 'timeout'].includes(scanResult.status)
+  );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -565,6 +563,79 @@ export default function SettingsScreen() {
           </View>
         </Animated.View>
       </ScrollView>
+
+      <Modal
+        transparent
+        animationType="fade"
+        visible={isBluetoothModalVisible}
+        onRequestClose={() => setIsBluetoothModalVisible(false)}
+      >
+        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsBluetoothModalVisible(false)} />
+          <View style={[styles.bluetoothSheet, { backgroundColor: colors.card }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+            <Text style={[styles.sheetTitle, { color: colors.text }]}>Select Car Bluetooth Device</Text>
+            <Text style={[styles.sheetSubtitle, { color: colors.textMuted }]}>Nearby and paired devices</Text>
+
+            {isScanningBluetooth ? (
+              <View style={styles.scanStateContainer}>
+                <ActivityIndicator size="small" color={colors.accent} />
+                <Text style={[styles.scanStateText, { color: colors.textMuted }]}>Scanning for devices...</Text>
+              </View>
+            ) : null}
+
+            {hasScanError ? (
+              <View style={[styles.scanStateContainer, { backgroundColor: colors.error + '10' }]}>
+                <Text style={[styles.scanStateErrorText, { color: colors.error }]}>
+                  {scanResult?.message ?? 'Unable to scan right now.'}
+                </Text>
+              </View>
+            ) : null}
+
+            {!isScanningBluetooth && scanResult?.status === 'empty' ? (
+              <View style={[styles.scanStateContainer, { backgroundColor: colors.surfaceSecondary }]}>
+                <Text style={[styles.scanStateText, { color: colors.textMuted }]}>{scanResult.message}</Text>
+              </View>
+            ) : null}
+
+            <ScrollView style={styles.scanResultsList} contentContainerStyle={styles.scanResultsContent}>
+              {scannedDevices.map((device) => (
+                <TouchableOpacity
+                  key={device.id}
+                  style={[styles.deviceItem, { backgroundColor: colors.surfaceSecondary }]}
+                  onPress={() => handleSelectScannedDevice(device)}
+                >
+                  <View style={styles.deviceItemText}>
+                    <Text style={[styles.deviceName, { color: colors.text }]}>{device.name}</Text>
+                    <Text style={[styles.deviceAddress, { color: colors.textMuted }]}>{device.address}</Text>
+                  </View>
+                  {savedBluetoothDevice?.id === device.id ? (
+                    <Text style={[styles.selectedText, { color: colors.success }]}>Selected</Text>
+                  ) : null}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <View style={styles.sheetActions}>
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: colors.surfaceSecondary }]}
+                onPress={() => void runBluetoothScan()}
+              >
+                <Text style={[styles.actionButtonText, { color: colors.text }]}>Scan Again</Text>
+              </TouchableOpacity>
+
+              {savedBluetoothDevice ? (
+                <TouchableOpacity
+                  style={[styles.actionButton, { backgroundColor: colors.error + '15' }]}
+                  onPress={handleRemoveSavedDevice}
+                >
+                  <Text style={[styles.actionButtonText, { color: colors.error }]}>Remove Device</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -719,5 +790,95 @@ const styles = StyleSheet.create({
   footerSubtext: {
     fontSize: 12,
     marginTop: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  bluetoothSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 28,
+    maxHeight: '75%',
+    gap: 10,
+  },
+  sheetHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    alignSelf: 'center',
+    marginBottom: 2,
+  },
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  sheetSubtitle: {
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  scanStateContainer: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  scanStateText: {
+    fontSize: 14,
+    flex: 1,
+  },
+  scanStateErrorText: {
+    fontSize: 14,
+    flex: 1,
+    fontWeight: '600',
+  },
+  scanResultsList: {
+    maxHeight: 260,
+  },
+  scanResultsContent: {
+    gap: 8,
+    paddingBottom: 4,
+  },
+  deviceItem: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  deviceItemText: {
+    flex: 1,
+    gap: 2,
+  },
+  deviceName: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  deviceAddress: {
+    fontSize: 13,
+  },
+  selectedText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  sheetActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  actionButton: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
