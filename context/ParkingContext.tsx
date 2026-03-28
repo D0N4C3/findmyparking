@@ -2,7 +2,15 @@ import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert } from 'react-native';
+import {
+  DEFAULT_STARTUP_PERMISSION_ASKED_STATE,
+  orchestrateStartupPermissions,
+  PermissionStatuses,
+  requestNotificationPermission,
+  StartupPermissionAskedState,
+  getPermissionStatuses,
+} from '@/services/permissions';
 
 export interface ParkingSpot {
   id: string;
@@ -55,6 +63,9 @@ interface ParkingContextType {
   currentLocation: Location.LocationObject | null;
   timerRemaining: number | null;
   isTimerActive: boolean;
+  permissionStatuses: PermissionStatuses;
+  refreshPermissionStatuses: () => Promise<void>;
+  requestNotificationAccess: () => Promise<boolean>;
 }
 
 const STORAGE_KEYS = {
@@ -63,6 +74,7 @@ const STORAGE_KEYS = {
   bluetoothDevice: '@parkping/bluetooth_device',
   autoDetection: '@parkping/auto_detection',
   parkingStats: '@parkping/parking_stats',
+  permissionAsked: '@parkping/permission_asked',
 };
 
 export const [ParkingProvider, useParking] = createContextHook<ParkingContextType>(() => {
@@ -74,10 +86,18 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
   const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
   const [timerRemaining, setTimerRemaining] = useState<number | null>(null);
   const [isTimerActive, setIsTimerActive] = useState(false);
+  const [permissionStatuses, setPermissionStatuses] = useState<PermissionStatuses>({
+    location: { foreground: 'not-requested', background: 'not-requested' },
+    bluetooth: 'not-requested',
+    notifications: 'not-requested',
+  });
+  const [permissionAskedState, setPermissionAskedState] = useState<StartupPermissionAskedState>(
+    DEFAULT_STARTUP_PERMISSION_ASKED_STATE
+  );
+  const [hasInitializedStartupPermissions, setHasInitializedStartupPermissions] = useState(false);
 
   useEffect(() => {
     void loadSavedData();
-    void requestLocationPermissions();
   }, []);
 
   useEffect(() => {
@@ -134,17 +154,24 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
 
   const loadSavedData = async () => {
     try {
-      const [parkingData, historyData, deviceData, autoDetectionData] = await Promise.all([
+      const [parkingData, historyData, deviceData, autoDetectionData, permissionAskedData] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.currentParking),
         AsyncStorage.getItem(STORAGE_KEYS.parkingHistory),
         AsyncStorage.getItem(STORAGE_KEYS.bluetoothDevice),
         AsyncStorage.getItem(STORAGE_KEYS.autoDetection),
+        AsyncStorage.getItem(STORAGE_KEYS.permissionAsked),
       ]);
 
       if (parkingData) setCurrentParking(JSON.parse(parkingData));
       if (historyData) setParkingHistory(JSON.parse(historyData));
       if (deviceData) setSavedBluetoothDeviceState(JSON.parse(deviceData));
       if (autoDetectionData) setAutoDetectionEnabledState(JSON.parse(autoDetectionData));
+      if (permissionAskedData) {
+        setPermissionAskedState({
+          ...DEFAULT_STARTUP_PERMISSION_ASKED_STATE,
+          ...JSON.parse(permissionAskedData),
+        });
+      }
     } catch (error) {
       console.error('Error loading saved data:', error);
     } finally {
@@ -152,23 +179,58 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     }
   };
 
-  const requestLocationPermissions = async () => {
-    const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
-    if (foregroundStatus !== 'granted') {
-      Alert.alert(
-        'Location Permission Required',
-        'ParkPing needs location access to save and find your parking spot.'
-      );
-      return;
-    }
+  const refreshPermissionStatuses = useCallback(async () => {
+    const latestStatuses = await getPermissionStatuses();
+    setPermissionStatuses(latestStatuses);
+  }, []);
 
-    if (Platform.OS === 'ios') {
-      const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
-      if (backgroundStatus !== 'granted') {
-        console.log('Background location permission not granted');
+  const runStartupPermissionOrchestrator = useCallback(async () => {
+    try {
+      const { statuses, askedState } = await orchestrateStartupPermissions({
+        askedState: permissionAskedState,
+        needsBackgroundLocation: isAutoDetectionEnabled,
+      });
+
+      setPermissionStatuses(statuses);
+      setPermissionAskedState(askedState);
+      await AsyncStorage.setItem(STORAGE_KEYS.permissionAsked, JSON.stringify(askedState));
+
+      if (statuses.location.foreground !== 'granted') {
+        Alert.alert(
+          'Location Permission Required',
+          'ParkPing needs location access to save and find your parking spot.'
+        );
       }
+    } catch (error) {
+      console.error('Error running permission orchestrator:', error);
+      await refreshPermissionStatuses();
     }
-  };
+  }, [isAutoDetectionEnabled, permissionAskedState, refreshPermissionStatuses]);
+
+  const requestNotificationAccess = useCallback(async () => {
+    try {
+      const nextStatuses = await requestNotificationPermission();
+      setPermissionStatuses(nextStatuses);
+
+      if (!permissionAskedState.notifications) {
+        const nextAskedState = { ...permissionAskedState, notifications: true };
+        setPermissionAskedState(nextAskedState);
+        await AsyncStorage.setItem(STORAGE_KEYS.permissionAsked, JSON.stringify(nextAskedState));
+      }
+
+      return nextStatuses.notifications === 'granted' || nextStatuses.notifications === 'limited';
+    } catch (error) {
+      console.error('Error requesting notification permission:', error);
+      return false;
+    }
+  }, [permissionAskedState]);
+
+  useEffect(() => {
+    if (isLoading || hasInitializedStartupPermissions) return;
+
+    setHasInitializedStartupPermissions(true);
+    void runStartupPermissionOrchestrator();
+  }, [isLoading, hasInitializedStartupPermissions, runStartupPermissionOrchestrator]);
 
   const calculateStats = useCallback((): ParkingStats => {
     const allSpots = currentParking ? [currentParking, ...parkingHistory] : parkingHistory;
@@ -439,6 +501,9 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     currentLocation,
     timerRemaining,
     isTimerActive,
+    permissionStatuses,
+    refreshPermissionStatuses,
+    requestNotificationAccess,
   }), [
     currentParking,
     parkingHistory,
@@ -461,5 +526,8 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     currentLocation,
     timerRemaining,
     isTimerActive,
+    permissionStatuses,
+    refreshPermissionStatuses,
+    requestNotificationAccess,
   ]);
 });

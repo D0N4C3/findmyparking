@@ -15,6 +15,20 @@ export interface PermissionStatuses {
   notifications: PermissionBadgeStatus;
 }
 
+export interface StartupPermissionAskedState {
+  locationForeground: boolean;
+  locationBackground: boolean;
+  bluetooth: boolean;
+  notifications: boolean;
+}
+
+export const DEFAULT_STARTUP_PERMISSION_ASKED_STATE: StartupPermissionAskedState = {
+  locationForeground: false,
+  locationBackground: false,
+  bluetooth: false,
+  notifications: false,
+};
+
 const mapExpoStatus = (status: Location.PermissionStatus | Notifications.PermissionStatus): PermissionBadgeStatus => {
   switch (status) {
     case 'granted':
@@ -92,6 +106,64 @@ export const getPermissionStatuses = async (): Promise<PermissionStatuses> => {
     bluetooth,
     notifications,
   };
+};
+
+const requestBluetoothPermissions = async () => {
+  if (Platform.OS !== 'android' || Platform.Version < 31) {
+    return;
+  }
+
+  await PermissionsAndroid.requestMultiple([
+    PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+    PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+  ]);
+};
+
+export const orchestrateStartupPermissions = async ({
+  askedState,
+  needsBackgroundLocation,
+}: {
+  askedState: StartupPermissionAskedState;
+  needsBackgroundLocation: boolean;
+}): Promise<{ statuses: PermissionStatuses; askedState: StartupPermissionAskedState }> => {
+  let statuses = await getPermissionStatuses();
+  const nextAskedState: StartupPermissionAskedState = { ...askedState };
+
+  if (statuses.location.foreground !== 'granted' && !nextAskedState.locationForeground) {
+    nextAskedState.locationForeground = true;
+    await Location.requestForegroundPermissionsAsync();
+    statuses = await getPermissionStatuses();
+  }
+
+  if (
+    needsBackgroundLocation &&
+    statuses.location.foreground === 'granted' &&
+    statuses.location.background !== 'granted' &&
+    !nextAskedState.locationBackground
+  ) {
+    nextAskedState.locationBackground = true;
+    await Location.requestBackgroundPermissionsAsync();
+    statuses = await getPermissionStatuses();
+  }
+
+  if (statuses.bluetooth !== 'granted' && !nextAskedState.bluetooth) {
+    nextAskedState.bluetooth = true;
+    await requestBluetoothPermissions();
+    statuses = await getPermissionStatuses();
+  }
+
+  if (statuses.notifications !== 'granted' && !nextAskedState.notifications) {
+    nextAskedState.notifications = true;
+    await Notifications.requestPermissionsAsync();
+    statuses = await getPermissionStatuses();
+  }
+
+  return { statuses, askedState: nextAskedState };
+};
+
+export const requestNotificationPermission = async (): Promise<PermissionStatuses> => {
+  await Notifications.requestPermissionsAsync();
+  return getPermissionStatuses();
 };
 
 export const PERMISSION_STATUS_LABELS: Record<PermissionBadgeStatus, string> = {
