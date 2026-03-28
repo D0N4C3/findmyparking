@@ -29,6 +29,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { AppButton, AppCard, SectionHeader } from '@/components/ui/primitives';
 
 function formatDate(timestamp: number): string {
   const date = new Date(timestamp);
@@ -319,35 +320,23 @@ export default function HistoryScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>History</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-            {stats.total} {stats.total === 1 ? 'parking' : 'parkings'} saved
-          </Text>
-        </View>
-        
-        <View style={styles.headerActions}>
-          <TouchableOpacity 
-            style={[styles.iconButton, { backgroundColor: colors.surface }]}
-            onPress={() => setFilterModalVisible(true)}
-          >
-            <Filter size={20} color={selectedFilter ? colors.accent : colors.text} />
-          </TouchableOpacity>
-          
-          {parkingHistory.length > 0 && (
-            <TouchableOpacity 
-              style={[styles.iconButton, { backgroundColor: colors.error + '15' }]}
-              onPress={handleClearHistory}
-            >
-              <Trash2 size={20} color={colors.error} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+      <SectionHeader
+        colors={colors}
+        title="History"
+        subtitle={`${stats.total} ${stats.total === 1 ? 'parking' : 'parkings'} saved`}
+        right={(
+          <View style={styles.headerActions}>
+            <AppButton colors={colors} style={[styles.iconButton, { backgroundColor: colors.surface }]} onPress={() => setFilterModalVisible(true)} icon={<Filter size={20} color={selectedFilter ? colors.accent : colors.text} />} />
+            {parkingHistory.length > 0 && (
+              <AppButton colors={colors} style={[styles.iconButton, { backgroundColor: colors.error + '15' }]} onPress={handleClearHistory} icon={<Trash2 size={20} color={colors.error} />} />
+            )}
+          </View>
+        )}
+        style={styles.header}
+      />
 
       {/* Search Bar */}
-      <View style={[styles.searchContainer, { backgroundColor: colors.card }]}>
+      <AppCard colors={colors} style={styles.searchContainer} elevated="none">
         <Search size={18} color={colors.textMuted} />
         <TextInput
           style={[styles.searchInput, { color: colors.text }]}
@@ -363,7 +352,7 @@ export default function HistoryScreen() {
             </View>
           </TouchableOpacity>
         )}
-      </View>
+      </AppCard>
 
       {/* Stats Row */}
       <View style={styles.statsRow}>

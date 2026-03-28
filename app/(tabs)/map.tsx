@@ -31,6 +31,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
+import { AppButton, SectionHeader, StatTile } from '@/components/ui/primitives';
 
 function getDirectionArrow(bearing: number): string {
   const directions = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
@@ -319,22 +320,13 @@ export default function MapScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.background }]}>
-        <View>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Find Your Car</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-            {distance !== null ? `${formatDistance(distance)} away` : 'Save your parking spot'}
-          </Text>
-        </View>
-        <TouchableOpacity 
-          style={[styles.iconButton, { backgroundColor: colors.surface }]}
-          onPress={() => {
-            void handleShareLocation();
-          }}
-        >
-          <Share2 size={20} color={colors.text} />
-        </TouchableOpacity>
-      </View>
+      <SectionHeader
+        colors={colors}
+        title="Find Your Car"
+        subtitle={distance !== null ? `${formatDistance(distance)} away` : 'Save your parking spot'}
+        right={<AppButton colors={colors} onPress={() => { void handleShareLocation(); }} icon={<Share2 size={20} color={colors.text} />} variant="secondary" style={styles.iconButton} />}
+        style={[styles.header, { backgroundColor: colors.background }]}
+      />
 
       {/* Map */}
       <View style={styles.mapContainer}>
@@ -405,27 +397,11 @@ export default function MapScreen() {
 
         {/* Map Controls */}
         <View style={styles.mapControls}>
-          <TouchableOpacity 
-            style={[styles.controlButton, { backgroundColor: colors.card }]}
-            onPress={toggleMapType}
-          >
-            <Layers size={22} color={colors.text} />
-          </TouchableOpacity>
+          <AppButton colors={colors} style={[styles.controlButton, { backgroundColor: colors.card }]} onPress={toggleMapType} icon={<Layers size={22} color={colors.text} />} />
           
-          <TouchableOpacity 
-            style={[styles.controlButton, { backgroundColor: colors.card }]}
-            onPress={handleRecenter}
-          >
-            <Crosshair size={22} color={colors.text} />
-          </TouchableOpacity>
+          <AppButton colors={colors} style={[styles.controlButton, { backgroundColor: colors.card }]} onPress={handleRecenter} icon={<Crosshair size={22} color={colors.text} />} />
 
-          <TouchableOpacity 
-            style={[styles.controlButton, { backgroundColor: colors.card }]}
-            onPress={handleFocusOnCar}
-            disabled={!currentParking}
-          >
-            <Car size={22} color={currentParking ? colors.accent : colors.textMuted} />
-          </TouchableOpacity>
+          <AppButton colors={colors} style={[styles.controlButton, { backgroundColor: colors.card }]} onPress={handleFocusOnCar} disabled={!currentParking} icon={<Car size={22} color={currentParking ? colors.accent : colors.textMuted} />} />
         </View>
 
         {/* Full Navigation Overlay */}
@@ -558,23 +534,16 @@ export default function MapScreen() {
 
             {/* Quick Stats */}
             <View style={[styles.quickStats, { backgroundColor: colors.surfaceSecondary }]}>
-              <View style={styles.quickStat}>
-                <Clock size={16} color={colors.textMuted} />
-                <Text style={[styles.quickStatText, { color: colors.textSecondary }]}>
-                  Parked at {currentParking?.timestamp ? new Date(currentParking.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
-                </Text>
-              </View>
+              <StatTile
+                colors={colors}
+                icon={<Clock size={16} color={colors.textMuted} />}
+                value={currentParking?.timestamp ? new Date(currentParking.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                label="parked at"
+              />
             </View>
 
             {/* Navigate Button */}
-            <TouchableOpacity 
-              style={[styles.navigateButton, { backgroundColor: colors.accent }]}
-              onPress={startInAppNavigation}
-              activeOpacity={0.85}
-            >
-              <Navigation2 size={22} color="#FFFFFF" />
-              <Text style={styles.navigateButtonText}>Start Navigation</Text>
-            </TouchableOpacity>
+            <AppButton colors={colors} variant="primary" onPress={startInAppNavigation} label="Start Navigation" icon={<Navigation2 size={22} color={colors.textOnAccent} />} style={styles.navigateButton} />
           </>
         ) : (
           <View style={styles.emptyState}>
@@ -651,6 +620,21 @@ const styles = StyleSheet.create({
   },
   map: {
     ...StyleSheet.absoluteFillObject,
+  },
+  webMapFallback: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    gap: 8,
+  },
+  webMapFallbackTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  webMapFallbackSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
   },
   mapControls: {
     position: 'absolute',

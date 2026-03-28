@@ -16,6 +16,7 @@ export const Colors = {
     error: '#EF4444',
     errorLight: '#F87171',
     text: '#1A1A2E',
+    textOnAccent: '#FFFFFF',
     textSecondary: '#64748B',
     textMuted: '#94A3B8',
     border: '#E2E8F0',
@@ -45,6 +46,7 @@ export const Colors = {
     error: '#F87171',
     errorLight: '#FCA5A5',
     text: '#F8FAFC',
+    textOnAccent: '#0F0F1A',
     textSecondary: '#94A3B8',
     textMuted: '#64748B',
     border: '#334155',
@@ -59,4 +61,4 @@ export const Colors = {
   },
 };
 
-export type ColorTheme = typeof Colors.light;
+export type ColorTheme = (typeof Colors)[keyof typeof Colors];
