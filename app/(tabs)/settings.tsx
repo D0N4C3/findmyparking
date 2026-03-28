@@ -35,9 +35,10 @@ import {
   Share,
   ActivityIndicator,
   Modal,
-  Pressable
+  Pressable,
+  AppState
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -139,6 +140,7 @@ export default function SettingsScreen() {
   const { isDark, theme, setTheme } = useTheme();
   const { showDestructive, showError, showConfirm } = useDialog();
   const colors = isDark ? Colors.dark : Colors.light;
+  const insets = useSafeAreaInsets();
   
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [isBluetoothModalVisible, setIsBluetoothModalVisible] = useState(false);
@@ -211,6 +213,16 @@ export default function SettingsScreen() {
     }, [refreshPermissionStatuses])
   );
 
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void refreshPermissionStatuses();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [refreshPermissionStatuses]);
+
   const handleShareApp = useCallback(async () => {
     try {
       await Share.share({
@@ -271,10 +283,7 @@ export default function SettingsScreen() {
     }
   }, [colors]);
 
-  const locationStatus: PermissionBadgeStatus =
-    permissionStatuses.location.foreground === 'granted'
-      ? permissionStatuses.location.background
-      : permissionStatuses.location.foreground;
+  const locationStatus: PermissionBadgeStatus = permissionStatuses.location.foreground;
   const scannedDevices = scanResult?.devices ?? [];
   const hasScanError = Boolean(
     scanResult && ['permission-denied', 'unsupported', 'error', 'timeout'].includes(scanResult.status)
@@ -572,7 +581,12 @@ export default function SettingsScreen() {
       >
         <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsBluetoothModalVisible(false)} />
-          <View style={[styles.bluetoothSheet, { backgroundColor: colors.card }]}>
+          <View
+            style={[
+              styles.bluetoothSheet,
+              { backgroundColor: colors.card, paddingBottom: Math.max(insets.bottom, 20) },
+            ]}
+          >
             <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
             <Text style={[styles.sheetTitle, { color: colors.text }]}>Select Car Bluetooth Device</Text>
             <Text style={[styles.sheetSubtitle, { color: colors.textMuted }]}>Nearby and paired devices</Text>
@@ -588,6 +602,14 @@ export default function SettingsScreen() {
               <View style={[styles.scanStateContainer, { backgroundColor: colors.error + '10' }]}>
                 <Text style={[styles.scanStateErrorText, { color: colors.error }]}>
                   {scanResult?.message ?? 'Unable to scan right now.'}
+                </Text>
+              </View>
+            ) : null}
+
+            {!isScanningBluetooth && scanResult?.status === 'unsupported' ? (
+              <View style={[styles.scanStateContainer, { backgroundColor: colors.surfaceSecondary }]}>
+                <Text style={[styles.scanStateText, { color: colors.textMuted }]}>
+                  Use a development/custom build with the Bluetooth scanner native module to discover nearby devices.
                 </Text>
               </View>
             ) : null}
