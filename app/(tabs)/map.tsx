@@ -15,17 +15,15 @@ import {
   VolumeX,
   Navigation2
 } from 'lucide-react-native';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Dimensions,
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
   Animated,
   Share,
   Alert,
   Platform,
-
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
@@ -33,8 +31,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
-
-const { width: _SCREEN_WIDTH } = Dimensions.get('window');
 
 function getDirectionArrow(bearing: number): string {
   const directions = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
@@ -73,7 +69,7 @@ export default function MapScreen() {
   
   const mapRef = useRef<MapView>(null);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
-  const [_heading, setHeading] = useState(0);
+  const [, setHeading] = useState(0);
   const [isNavigating, setIsNavigating] = useState(false);
   const [routeSteps, setRouteSteps] = useState<RouteStep[]>([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -116,13 +112,17 @@ export default function MapScreen() {
     let headingSubscription: Location.LocationSubscription | null = null;
 
     const startHeadingUpdates = async () => {
-      const { status } = await Location.getForegroundPermissionsAsync();
-      if (status !== 'granted') return;
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== 'granted') return;
 
-      headingSubscription = await Location.watchHeadingAsync((headingData) => {
-        setHeading(headingData.trueHeading ?? headingData.magHeading);
-      });
-      // Using heading for future compass rotation feature
+        headingSubscription = await Location.watchHeadingAsync((headingData) => {
+          setHeading(headingData.trueHeading ?? headingData.magHeading);
+        });
+        // Using heading for future compass rotation feature
+      } catch (error) {
+        console.warn('Heading sensor unavailable; disabling heading updates.', error);
+      }
     };
 
     void startHeadingUpdates();
@@ -187,8 +187,6 @@ export default function MapScreen() {
     }
     
     // Create route steps
-    const _midPoint = Math.floor(distance / 2);
-    
     steps.push({
       instruction: `${primaryDirection}${Math.abs(latDiff) > 0.0001 && Math.abs(lonDiff) > 0.0001 ? `, then turn ${secondaryDirection}` : ''}`,
       distance: Math.min(50, Math.floor(distance * 0.3)),
@@ -276,7 +274,7 @@ export default function MapScreen() {
     };
   }, []);
 
-  const _handleShareLocation = useCallback(async () => {
+  const handleShareLocation = useCallback(async () => {
     if (!currentParking) {
       Alert.alert('No Location', 'Save a parking spot first to share it.');
       return;
@@ -329,7 +327,11 @@ export default function MapScreen() {
           </Text>
         </View>
         <TouchableOpacity 
-          style={[styles.iconButton, { backgroundColor: colors.surface }]}>
+          style={[styles.iconButton, { backgroundColor: colors.surface }]}
+          onPress={() => {
+            void handleShareLocation();
+          }}
+        >
           <Share2 size={20} color={colors.text} />
         </TouchableOpacity>
       </View>
@@ -679,36 +681,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 5,
     elevation: 6,
-  },
-  navigatingIndicator: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  navigatingText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  stopNavButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginLeft: 4,
-  },
-  stopNavText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   navigationOverlay: {
     position: 'absolute',
