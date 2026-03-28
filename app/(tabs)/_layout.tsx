@@ -23,7 +23,7 @@ function TabIcon({
         strokeWidth={isFocused ? 2.5 : 2}
       />
       {isFocused && (
-        <View style={styles.activeDot} />
+        <View style={[styles.activeDot, { backgroundColor: color }]} />
       )}
     </View>
   );
@@ -45,6 +45,13 @@ export default function TabLayout() {
           shadowOffset: { width: 0, height: -4 },
           shadowOpacity: 0.1,
           shadowRadius: 12,
+          height: 84,
+          paddingTop: 8,
+          paddingBottom: 10,
+        },
+        tabBarItemStyle: {
+          justifyContent: 'center',
+          alignItems: 'center',
         },
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textMuted,
@@ -107,7 +114,6 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'currentColor',
     marginTop: 4,
   },
 });

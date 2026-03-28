@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "FindMyParking",
-    "slug": "4mlbes11ejk6i7m848iy2",
+    "slug": "findmyparking",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
