@@ -1,6 +1,12 @@
 import { useParking, CarBluetoothDevice } from '@/context/ParkingContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Colors } from '@/constants/colors';
+import {
+  getPermissionStatuses,
+  PERMISSION_STATUS_LABELS,
+  PermissionBadgeStatus,
+  PermissionStatuses,
+} from '@/services/permissions';
 import { 
   Bluetooth, 
   MapPin, 
@@ -35,6 +41,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 
 // Mock Bluetooth devices for demo
 const MOCK_BLUETOOTH_DEVICES: CarBluetoothDevice[] = [
@@ -135,6 +142,11 @@ export default function SettingsScreen() {
   
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [permissionStatuses, setPermissionStatuses] = useState<PermissionStatuses>({
+    location: { foreground: 'not-requested', background: 'not-requested' },
+    bluetooth: 'not-requested',
+    notifications: 'not-requested',
+  });
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -198,6 +210,17 @@ export default function SettingsScreen() {
     void Linking.openSettings();
   }, []);
 
+  const refreshPermissionStatuses = useCallback(async () => {
+    const latestStatuses = await getPermissionStatuses();
+    setPermissionStatuses(latestStatuses);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshPermissionStatuses();
+    }, [refreshPermissionStatuses])
+  );
+
   const handleShareApp = useCallback(async () => {
     try {
       await Share.share({
@@ -223,6 +246,25 @@ export default function SettingsScreen() {
     setSoundEnabled(value);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
+
+  const getPermissionBadgeColors = useCallback((status: PermissionBadgeStatus) => {
+    switch (status) {
+      case 'granted':
+        return { text: colors.success, background: colors.success + '20' };
+      case 'denied':
+        return { text: colors.error, background: colors.error + '20' };
+      case 'limited':
+        return { text: colors.warning, background: colors.warning + '20' };
+      case 'not-requested':
+      default:
+        return { text: colors.textMuted, background: colors.surfaceSecondary };
+    }
+  }, [colors]);
+
+  const locationStatus: PermissionBadgeStatus =
+    permissionStatuses.location.foreground === 'granted'
+      ? permissionStatuses.location.background
+      : permissionStatuses.location.foreground;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -401,8 +443,10 @@ export default function SettingsScreen() {
               onPress={handleOpenPermissions}
               colors={colors}
               rightElement={
-                <View style={[styles.badge, { backgroundColor: colors.success + '20' }]}>
-                  <Text style={[styles.badgeText, { color: colors.success }]}>Granted</Text>
+                <View style={[styles.badge, { backgroundColor: getPermissionBadgeColors(locationStatus).background }]}>
+                  <Text style={[styles.badgeText, { color: getPermissionBadgeColors(locationStatus).text }]}>
+                    {PERMISSION_STATUS_LABELS[locationStatus]}
+                  </Text>
                 </View>
               }
             />
@@ -414,8 +458,25 @@ export default function SettingsScreen() {
               onPress={handleOpenPermissions}
               colors={colors}
               rightElement={
-                <View style={[styles.badge, { backgroundColor: colors.success + '20' }]}>
-                  <Text style={[styles.badgeText, { color: colors.success }]}>Granted</Text>
+                <View style={[styles.badge, { backgroundColor: getPermissionBadgeColors(permissionStatuses.bluetooth).background }]}>
+                  <Text style={[styles.badgeText, { color: getPermissionBadgeColors(permissionStatuses.bluetooth).text }]}>
+                    {PERMISSION_STATUS_LABELS[permissionStatuses.bluetooth]}
+                  </Text>
+                </View>
+              }
+            />
+
+            <SettingItem
+              icon={<Bell size={22} color={colors.accent} />}
+              title="Notification Access"
+              subtitle="Required for parking reminders"
+              onPress={handleOpenPermissions}
+              colors={colors}
+              rightElement={
+                <View style={[styles.badge, { backgroundColor: getPermissionBadgeColors(permissionStatuses.notifications).background }]}>
+                  <Text style={[styles.badgeText, { color: getPermissionBadgeColors(permissionStatuses.notifications).text }]}>
+                    {PERMISSION_STATUS_LABELS[permissionStatuses.notifications]}
+                  </Text>
                 </View>
               }
             />
