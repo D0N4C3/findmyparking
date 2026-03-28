@@ -2,10 +2,8 @@ import { useParking, CarBluetoothDevice } from '@/context/ParkingContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Colors } from '@/constants/colors';
 import {
-  getPermissionStatuses,
   PERMISSION_STATUS_LABELS,
   PermissionBadgeStatus,
-  PermissionStatuses,
 } from '@/services/permissions';
 import { 
   Bluetooth, 
@@ -135,18 +133,15 @@ export default function SettingsScreen() {
     isAutoDetectionEnabled, 
     setAutoDetectionEnabled,
     clearHistory,
-    parkingStats
+    parkingStats,
+    permissionStatuses,
+    refreshPermissionStatuses,
+    requestNotificationAccess,
   } = useParking();
   const { isDark, theme, setTheme } = useTheme();
   const colors = isDark ? Colors.dark : Colors.light;
   
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [permissionStatuses, setPermissionStatuses] = useState<PermissionStatuses>({
-    location: { foreground: 'not-requested', background: 'not-requested' },
-    bluetooth: 'not-requested',
-    notifications: 'not-requested',
-  });
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -210,11 +205,6 @@ export default function SettingsScreen() {
     void Linking.openSettings();
   }, []);
 
-  const refreshPermissionStatuses = useCallback(async () => {
-    const latestStatuses = await getPermissionStatuses();
-    setPermissionStatuses(latestStatuses);
-  }, []);
-
   useFocusEffect(
     useCallback(() => {
       void refreshPermissionStatuses();
@@ -238,9 +228,20 @@ export default function SettingsScreen() {
   }, [setAutoDetectionEnabled]);
 
   const handleToggleNotifications = useCallback((value: boolean) => {
-    setNotificationsEnabled(value);
+    if (value) {
+      void requestNotificationAccess();
+    } else {
+      Alert.alert(
+        'Manage Notification Permission',
+        'Notification permission can only be changed from system settings.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: handleOpenPermissions },
+        ]
+      );
+    }
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, []);
+  }, [handleOpenPermissions, requestNotificationAccess]);
 
   const handleToggleSound = useCallback((value: boolean) => {
     setSoundEnabled(value);
@@ -404,10 +405,18 @@ export default function SettingsScreen() {
                 </View>
               </View>
               <Switch
-                value={notificationsEnabled}
+                value={
+                  permissionStatuses.notifications === 'granted' ||
+                  permissionStatuses.notifications === 'limited'
+                }
                 onValueChange={handleToggleNotifications}
                 trackColor={{ false: colors.surfaceSecondary, true: colors.accent + '50' }}
-                thumbColor={notificationsEnabled ? colors.accent : colors.textMuted}
+                thumbColor={
+                  permissionStatuses.notifications === 'granted' ||
+                  permissionStatuses.notifications === 'limited'
+                    ? colors.accent
+                    : colors.textMuted
+                }
               />
             </View>
 
