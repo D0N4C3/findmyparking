@@ -297,6 +297,10 @@ export default function MapScreen() {
     setMapType(prev => prev === 'standard' ? 'satellite' : 'standard');
   }, []);
 
+
+  const canRenderUrlTiles = Platform.OS === 'web' && typeof UrlTile !== 'undefined';
+  const canRenderMapView = typeof MapView !== 'undefined';
+
   const initialRegion = currentLocation ? {
     latitude: currentLocation.coords.latitude,
     longitude: currentLocation.coords.longitude,
@@ -332,6 +336,7 @@ export default function MapScreen() {
 
       {/* Map */}
       <View style={styles.mapContainer}>
+        {canRenderMapView ? (
         <MapView
           ref={mapRef}
           style={styles.map}
@@ -345,7 +350,7 @@ export default function MapScreen() {
           mapType={mapType}
           customMapStyle={isDark ? darkMapStyle : []}
         >
-          {Platform.OS === 'web' && (
+          {canRenderUrlTiles && (
             <UrlTile
               urlTemplate={colors.mapTile}
               maximumZ={19}
@@ -387,6 +392,14 @@ export default function MapScreen() {
             </>
           )}
         </MapView>
+        ) : (
+          <View style={[styles.webMapFallback, { backgroundColor: colors.surfaceSecondary }]}>
+            <Text style={[styles.webMapFallbackTitle, { color: colors.text }]}>Map preview unavailable</Text>
+            <Text style={[styles.webMapFallbackSubtitle, { color: colors.textSecondary }]}>
+              The current platform does not support map rendering in this build.
+            </Text>
+          </View>
+        )}
 
         {/* Map Controls */}
         <View style={styles.mapControls}>
