@@ -24,7 +24,6 @@ import {
   ScrollView,
   Animated,
   ActivityIndicator,
-  Alert,
   Share,
   Linking,
   Platform,
@@ -37,6 +36,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AppButton, AppCard, SectionHeader, StatTile } from '@/components/ui/primitives';
+import { useDialog } from '@/context/DialogContext';
+import { DIALOG_COPY } from '@/constants/dialogs';
 
 function formatTimeAgo(timestamp: number): string {
   const now = Date.now();
@@ -222,6 +223,7 @@ export default function HomeScreen() {
   const { isDark } = useTheme();
   const colors = isDark ? Colors.dark : Colors.light;
   const router = useRouter();
+  const { showError } = useDialog();
   
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -263,9 +265,9 @@ export default function HomeScreen() {
     try {
       await saveParkingLocation();
     } catch {
-      Alert.alert('Error', 'Failed to save parking location');
+      showError(DIALOG_COPY.errors.saveParking.title, DIALOG_COPY.errors.saveParking.message);
     }
-  }, [saveParkingLocation]);
+  }, [saveParkingLocation, showError]);
 
   const handleNavigateToCar = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -297,9 +299,9 @@ export default function HomeScreen() {
         title: 'My Parking Location',
       });
     } catch {
-      Alert.alert('Error', 'Failed to share location');
+      showError(DIALOG_COPY.errors.shareLocation.title, DIALOG_COPY.errors.shareLocation.message);
     }
-  }, [currentParking]);
+  }, [currentParking, showError]);
 
   const handleSetTimer = useCallback((minutes: number) => {
     setParkingTimer(minutes);

@@ -2,7 +2,6 @@ import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert } from 'react-native';
 import {
   DEFAULT_STARTUP_PERMISSION_ASKED_STATE,
   orchestrateStartupPermissions,
@@ -11,6 +10,8 @@ import {
   StartupPermissionAskedState,
   getPermissionStatuses,
 } from '@/services/permissions';
+import { useDialog } from '@/context/DialogContext';
+import { DIALOG_COPY } from '@/constants/dialogs';
 
 export interface ParkingSpot {
   id: string;
@@ -78,6 +79,7 @@ const STORAGE_KEYS = {
 };
 
 export const [ParkingProvider, useParking] = createContextHook<ParkingContextType>(() => {
+  const { showError } = useDialog();
   const [currentParking, setCurrentParking] = useState<ParkingSpot | null>(null);
   const [parkingHistory, setParkingHistory] = useState<ParkingSpot[]>([]);
   const [savedBluetoothDevice, setSavedBluetoothDeviceState] = useState<CarBluetoothDevice | null>(null);
@@ -196,16 +198,13 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
       await AsyncStorage.setItem(STORAGE_KEYS.permissionAsked, JSON.stringify(askedState));
 
       if (statuses.location.foreground !== 'granted') {
-        Alert.alert(
-          'Location Permission Required',
-          'ParkPing needs location access to save and find your parking spot.'
-        );
+        showError(DIALOG_COPY.permissions.locationRequired.title, DIALOG_COPY.permissions.locationRequired.message);
       }
     } catch (error) {
       console.error('Error running permission orchestrator:', error);
       await refreshPermissionStatuses();
     }
-  }, [isAutoDetectionEnabled, permissionAskedState, refreshPermissionStatuses]);
+  }, [isAutoDetectionEnabled, permissionAskedState, refreshPermissionStatuses, showError]);
 
   const requestNotificationAccess = useCallback(async () => {
     try {
@@ -282,7 +281,7 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
       } else {
         const { status } = await Location.getForegroundPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert('Permission Required', 'Please grant location permission to save your parking spot.');
+          showError(DIALOG_COPY.permissions.savePermissionRequired.title, DIALOG_COPY.permissions.savePermissionRequired.message);
           return;
         }
         
@@ -331,11 +330,11 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
       await AsyncStorage.setItem(STORAGE_KEYS.currentParking, JSON.stringify(newParking));
     } catch (error) {
       console.error('Error saving parking location:', error);
-      Alert.alert('Error', 'Failed to save parking location. Please try again.');
+      showError(DIALOG_COPY.errors.saveParking.title, DIALOG_COPY.errors.saveParking.message);
     } finally {
       setIsLoading(false);
     }
-  }, [currentParking, parkingHistory]);
+  }, [currentParking, parkingHistory, showError]);
 
   const updateParkingSpot = useCallback(async (id: string, updates: Partial<ParkingSpot>) => {
     try {

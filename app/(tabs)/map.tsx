@@ -22,7 +22,6 @@ import {
   TouchableOpacity,
   Animated,
   Share,
-  Alert,
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,6 +31,8 @@ import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AppButton, SectionHeader, StatTile } from '@/components/ui/primitives';
+import { useDialog } from '@/context/DialogContext';
+import { DIALOG_COPY } from '@/constants/dialogs';
 
 function getDirectionArrow(bearing: number): string {
   const directions = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
@@ -67,6 +68,7 @@ export default function MapScreen() {
   } = useParking();
   const { isDark } = useTheme();
   const colors = isDark ? Colors.dark : Colors.light;
+  const { showError } = useDialog();
   
   const mapRef = useRef<MapView>(null);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
@@ -214,7 +216,7 @@ export default function MapScreen() {
   const startInAppNavigation = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!currentParking || !currentLocation) {
-      Alert.alert('No Location', 'Save a parking spot and ensure GPS is active to navigate.');
+      showError(DIALOG_COPY.prompts.noParkingSaved.title, DIALOG_COPY.prompts.noParkingSaved.message);
       return;
     }
     
@@ -250,7 +252,7 @@ export default function MapScreen() {
         longitudeDelta: 0.002,
       }, 500);
     }
-  }, [currentParking, currentLocation, calculateRouteSteps, getDistanceToCar]);
+  }, [calculateRouteSteps, currentLocation, currentParking, getDistanceToCar, showError]);
 
   const stopNavigation = useCallback(() => {
     setIsNavigating(false);
@@ -277,7 +279,7 @@ export default function MapScreen() {
 
   const handleShareLocation = useCallback(async () => {
     if (!currentParking) {
-      Alert.alert('No Location', 'Save a parking spot first to share it.');
+      showError(DIALOG_COPY.prompts.noParkingSaved.title, DIALOG_COPY.prompts.noParkingSaved.message);
       return;
     }
 
@@ -287,9 +289,9 @@ export default function MapScreen() {
         title: 'My Parking Location',
       });
     } catch {
-      Alert.alert('Error', 'Failed to share location');
+      showError(DIALOG_COPY.errors.shareLocation.title, DIALOG_COPY.errors.shareLocation.message);
     }
-  }, [currentParking]);
+  }, [currentParking, showError]);
 
   const toggleMapType = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

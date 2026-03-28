@@ -30,7 +30,6 @@ import {
   TouchableOpacity, 
   ScrollView,
   Switch,
-  Alert,
   Linking,
   Animated,
   Share
@@ -41,6 +40,8 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { AppCard, SectionHeader } from '@/components/ui/primitives';
+import { useDialog } from '@/context/DialogContext';
+import { DIALOG_COPY } from '@/constants/dialogs';
 
 // Mock Bluetooth devices for demo
 const MOCK_BLUETOOTH_DEVICES: CarBluetoothDevice[] = [
@@ -140,6 +141,7 @@ export default function SettingsScreen() {
     requestNotificationAccess,
   } = useParking();
   const { isDark, theme, setTheme } = useTheme();
+  const { showDestructive, showError, showConfirm, showPicker } = useDialog();
   const colors = isDark ? Colors.dark : Colors.light;
   
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -155,52 +157,66 @@ export default function SettingsScreen() {
 
   const handleSelectBluetoothDevice = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
-    Alert.alert(
-      'Select Car Bluetooth Device',
-      'Choose your car\'s Bluetooth device for automatic parking detection',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        ...MOCK_BLUETOOTH_DEVICES.map(device => ({
-          text: device.name,
-          onPress: () => {
-            setSavedBluetoothDevice(device);
-            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          }
-        })),
-        savedBluetoothDevice ? {
-          text: 'Remove Device',
-          style: 'destructive' as const,
-          onPress: () => {
-            setSavedBluetoothDevice(null);
-            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          }
-        } : null,
-      ].filter(Boolean) as { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[]
-    );
-  }, [savedBluetoothDevice, setSavedBluetoothDevice]);
+
+    const pickerItems = [
+      {
+        id: DIALOG_COPY.actions.cancel.id,
+        label: DIALOG_COPY.actions.cancel.label,
+      },
+      ...MOCK_BLUETOOTH_DEVICES.map((device) => ({
+        id: device.id,
+        label: device.name,
+        subtitle: device.address,
+        selected: savedBluetoothDevice?.id === device.id,
+      })),
+      ...(savedBluetoothDevice
+        ? [
+            {
+              id: DIALOG_COPY.actions.removeDevice.id,
+              label: DIALOG_COPY.actions.removeDevice.label,
+              destructive: true,
+            },
+          ]
+        : []),
+    ];
+
+    showPicker({
+      title: DIALOG_COPY.prompts.selectBluetooth.title,
+      message: DIALOG_COPY.prompts.selectBluetooth.message,
+      items: pickerItems,
+      onSelect: (selectionId) => {
+        if (selectionId === DIALOG_COPY.actions.cancel.id) return;
+
+        if (selectionId === DIALOG_COPY.actions.removeDevice.id) {
+          setSavedBluetoothDevice(null);
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          return;
+        }
+
+        const selected = MOCK_BLUETOOTH_DEVICES.find((device) => device.id === selectionId);
+        if (selected) {
+          setSavedBluetoothDevice(selected);
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      },
+    });
+  }, [savedBluetoothDevice, setSavedBluetoothDevice, showPicker]);
 
   const handleClearAllData = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    
-    Alert.alert(
-      'Clear All Data',
-      'This will delete all parking history and settings. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Clear All', 
-          style: 'destructive',
-          onPress: () => {
-            clearHistory();
-            setSavedBluetoothDevice(null);
-            setAutoDetectionEnabled(true);
-            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          }
-        }
-      ]
-    );
-  }, [clearHistory, setSavedBluetoothDevice, setAutoDetectionEnabled]);
+
+    showDestructive({
+      title: DIALOG_COPY.prompts.clearAllData.title,
+      message: DIALOG_COPY.prompts.clearAllData.message,
+      confirmLabel: DIALOG_COPY.actions.clearAll.label,
+      onConfirm: () => {
+        clearHistory();
+        setSavedBluetoothDevice(null);
+        setAutoDetectionEnabled(true);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      },
+    });
+  }, [clearHistory, setAutoDetectionEnabled, setSavedBluetoothDevice, showDestructive]);
 
   const handleOpenPermissions = useCallback(() => {
     void Linking.openSettings();
@@ -219,9 +235,9 @@ export default function SettingsScreen() {
         title: 'ParkPing',
       });
     } catch {
-      Alert.alert('Error', 'Failed to share app');
+      showError(DIALOG_COPY.errors.shareApp.title, DIALOG_COPY.errors.shareApp.message);
     }
-  }, []);
+  }, [showError]);
 
   const handleToggleAutoDetection = useCallback((value: boolean) => {
     setAutoDetectionEnabled(value);
@@ -232,17 +248,15 @@ export default function SettingsScreen() {
     if (value) {
       void requestNotificationAccess();
     } else {
-      Alert.alert(
-        'Manage Notification Permission',
-        'Notification permission can only be changed from system settings.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Settings', onPress: handleOpenPermissions },
-        ]
-      );
+      showConfirm({
+        title: DIALOG_COPY.permissions.notificationsSettings.title,
+        message: DIALOG_COPY.permissions.notificationsSettings.message,
+        confirmLabel: DIALOG_COPY.actions.openSettings.label,
+        onConfirm: handleOpenPermissions,
+      });
     }
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [handleOpenPermissions, requestNotificationAccess]);
+  }, [handleOpenPermissions, requestNotificationAccess, showConfirm]);
 
   const handleToggleSound = useCallback((value: boolean) => {
     setSoundEnabled(value);
