@@ -15,14 +15,22 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.interethiopia.findmyparking"
+      "bundleIdentifier": "com.interethiopia.findmyparking",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "ParkPing uses Bluetooth to detect when your car disconnects so it can save your parking location.",
+        "NSBluetoothPeripheralUsageDescription": "ParkPing uses Bluetooth to detect when your car disconnects so it can save your parking location."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.interethiopia.findmyparking"
+      "package": "com.interethiopia.findmyparking",
+      "permissions": [
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT"
+      ]
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
