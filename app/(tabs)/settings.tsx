@@ -40,6 +40,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
+import { AppCard, SectionHeader } from '@/components/ui/primitives';
 
 // Mock Bluetooth devices for demo
 const MOCK_BLUETOOTH_DEVICES: CarBluetoothDevice[] = [
@@ -270,12 +271,12 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Settings</Text>
-        <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-          Customize your experience
-        </Text>
-      </View>
+      <SectionHeader
+        colors={colors}
+        title="Settings"
+        subtitle="Customize your experience"
+        style={styles.header}
+      />
 
       <ScrollView 
         style={styles.scrollView}
@@ -325,7 +326,7 @@ export default function SettingsScreen() {
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>APPEARANCE</Text>
             
-            <View style={[styles.themeSelector, { backgroundColor: colors.card }]}>
+            <AppCard colors={colors} style={styles.themeSelector} elevated="none">
               <Text style={[styles.themeSelectorTitle, { color: colors.text }]}>Theme</Text>
               <View style={styles.themeOptions}>
                 <ThemeOption
@@ -350,7 +351,7 @@ export default function SettingsScreen() {
                   colors={colors}
                 />
               </View>
-            </View>
+            </AppCard>
           </View>
 
           {/* Auto Detection Section */}
@@ -367,7 +368,7 @@ export default function SettingsScreen() {
               colors={colors}
             />
 
-            <View style={[styles.switchItem, { backgroundColor: colors.card }]}>
+            <AppCard colors={colors} style={styles.switchItem} elevated="none">
               <View style={styles.switchLeft}>
                 <View style={[styles.iconContainer, { backgroundColor: colors.success + '15' }]}>
                   <Navigation size={22} color={colors.success} />
@@ -385,14 +386,14 @@ export default function SettingsScreen() {
                 trackColor={{ false: colors.surfaceSecondary, true: colors.accent + '50' }}
                 thumbColor={isAutoDetectionEnabled ? colors.accent : colors.textMuted}
               />
-            </View>
+            </AppCard>
           </View>
 
           {/* Notifications Section */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>NOTIFICATIONS</Text>
             
-            <View style={[styles.switchItem, { backgroundColor: colors.card }]}>
+            <AppCard colors={colors} style={styles.switchItem} elevated="none">
               <View style={styles.switchLeft}>
                 <View style={[styles.iconContainer, { backgroundColor: colors.warning + '15' }]}>
                   <Bell size={22} color={colors.warning} />
@@ -418,9 +419,9 @@ export default function SettingsScreen() {
                     : colors.textMuted
                 }
               />
-            </View>
+            </AppCard>
 
-            <View style={[styles.switchItem, { backgroundColor: colors.card }]}>
+            <AppCard colors={colors} style={styles.switchItem} elevated="none">
               <View style={styles.switchLeft}>
                 <View style={[styles.iconContainer, { backgroundColor: colors.accent + '15' }]}>
                   <Navigation size={22} color={colors.accent} />
@@ -438,7 +439,7 @@ export default function SettingsScreen() {
                 trackColor={{ false: colors.surfaceSecondary, true: colors.accent + '50' }}
                 thumbColor={soundEnabled ? colors.accent : colors.textMuted}
               />
-            </View>
+            </AppCard>
           </View>
 
           {/* Permissions Section */}

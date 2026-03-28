@@ -36,6 +36,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { AppButton, AppCard, SectionHeader, StatTile } from '@/components/ui/primitives';
 
 function formatTimeAgo(timestamp: number): string {
   const now = Date.now();
@@ -141,19 +142,9 @@ function TimerModal({ visible, onClose, onSetTimer, colors }: TimerModalProps) {
             placeholderTextColor={colors.textMuted}
           />
 
-          <View style={styles.modalButtons}>
-            <TouchableOpacity
-              style={[styles.modalButton, { backgroundColor: colors.surfaceSecondary }]}
-              onPress={onClose}
-            >
-              <Text style={[styles.modalButtonText, { color: colors.text }]}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modalButton, { backgroundColor: colors.accent }]}
-              onPress={handleSet}
-            >
-              <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>Set Timer</Text>
-            </TouchableOpacity>
+            <View style={styles.modalButtons}>
+            <AppButton colors={colors} label="Cancel" variant="secondary" onPress={onClose} style={styles.modalButton} />
+            <AppButton colors={colors} label="Set Timer" variant="primary" onPress={handleSet} style={styles.modalButton} />
           </View>
         </View>
       </View>
@@ -203,18 +194,8 @@ function NoteModal({ visible, onClose, onSave, initialNote, colors }: NoteModalP
             maxLength={100}
           />
           <View style={styles.modalButtons}>
-            <TouchableOpacity
-              style={[styles.modalButton, { backgroundColor: colors.surfaceSecondary }]}
-              onPress={onClose}
-            >
-              <Text style={[styles.modalButtonText, { color: colors.text }]}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modalButton, { backgroundColor: colors.accent }]}
-              onPress={() => { onSave(note); onClose(); }}
-            >
-              <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>Save</Text>
-            </TouchableOpacity>
+            <AppButton colors={colors} label="Cancel" variant="secondary" onPress={onClose} style={styles.modalButton} />
+            <AppButton colors={colors} label="Save" variant="primary" onPress={() => { onSave(note); onClose(); }} style={styles.modalButton} />
           </View>
         </View>
       </View>
@@ -338,24 +319,17 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>ParkPing</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-            Never forget where you parked
-          </Text>
-        </View>
-        {isAutoDetectionEnabled && savedBluetoothDevice && (
-          <Animated.View style={[styles.bluetoothBadge, { 
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            transform: [{ scale: pulseAnim }]
-          }]}>
+      <SectionHeader
+        colors={colors}
+        title="ParkPing"
+        subtitle="Never forget where you parked"
+        right={isAutoDetectionEnabled && savedBluetoothDevice ? (
+          <Animated.View style={[styles.bluetoothBadge, { backgroundColor: colors.surface, borderColor: colors.border, transform: [{ scale: pulseAnim }] }]}>
             <Bluetooth size={16} color={colors.success} />
             <Text style={[styles.bluetoothText, { color: colors.success }]}>Auto</Text>
           </Animated.View>
-        )}
-      </View>
+        ) : undefined}
+      />
 
       <ScrollView 
         style={styles.scrollView}
@@ -363,19 +337,8 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Main Status Card */}
-        <Animated.View 
-          style={[
-            styles.mainCard, 
-            { 
-              backgroundColor: colors.card,
-              shadowColor: colors.shadow,
-              transform: [{ translateY: slideAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [30, 0]
-              }) }]
-            }
-          ]}
-        >
+        <Animated.View style={[styles.mainCard, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }] }]}>
+          <AppCard colors={colors} elevated="lg">
           {currentParking ? (
             <>
               {/* Car Icon & Status */}
@@ -412,29 +375,9 @@ export default function HomeScreen() {
 
               {/* Stats Grid */}
               <View style={styles.statsGrid}>
-                <View style={[styles.statItem, { backgroundColor: colors.surfaceSecondary }]}>
-                  <Navigation size={18} color={colors.accent} />
-                  <Text style={[styles.statValue, { color: colors.text }]}>
-                    {formatDistance(distance)}
-                  </Text>
-                  <Text style={[styles.statLabel, { color: colors.textMuted }]}>away</Text>
-                </View>
-                
-                <View style={[styles.statItem, { backgroundColor: colors.surfaceSecondary }]}>
-                  <Clock size={18} color={colors.accent} />
-                  <Text style={[styles.statValue, { color: colors.text }]}>
-                    {walkingTime !== null ? `${walkingTime}m` : '--'}
-                  </Text>
-                  <Text style={[styles.statLabel, { color: colors.textMuted }]}>walk time</Text>
-                </View>
-
-                <View style={[styles.statItem, { backgroundColor: colors.surfaceSecondary }]}>
-                  <Zap size={18} color={colors.accent} />
-                  <Text style={[styles.statValue, { color: colors.text }]}>
-                    {new Date(currentParking.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
-                  <Text style={[styles.statLabel, { color: colors.textMuted }]}>parked at</Text>
-                </View>
+                <StatTile colors={colors} icon={<Navigation size={18} color={colors.accent} />} value={formatDistance(distance)} label="away" />
+                <StatTile colors={colors} icon={<Clock size={18} color={colors.accent} />} value={walkingTime !== null ? `${walkingTime}m` : '--'} label="walk time" />
+                <StatTile colors={colors} icon={<Zap size={18} color={colors.accent} />} value={new Date(currentParking.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} label="parked at" />
               </View>
 
               {/* Timer Alert */}
@@ -451,49 +394,17 @@ export default function HomeScreen() {
               )}
 
               {/* Primary Action */}
-              <TouchableOpacity 
-                style={[styles.navigateButton, { backgroundColor: colors.accent }]}
-                onPress={handleOpenExternalMaps}
-                activeOpacity={0.85}
-              >
-                <Navigation size={20} color="#FFFFFF" />
-                <Text style={styles.navigateButtonText}>Navigate to Car</Text>
-                <ChevronRight size={20} color="#FFFFFF" />
-              </TouchableOpacity>
+              <AppButton colors={colors} label="Navigate to Car" onPress={handleOpenExternalMaps} variant="primary" icon={<Navigation size={20} color={colors.textOnAccent} />} trailingIcon={<ChevronRight size={20} color={colors.textOnAccent} />} style={styles.navigateButton} />
 
               {/* Quick Actions Row */}
               <View style={styles.quickActions}>
-                <TouchableOpacity 
-                  style={[styles.quickAction, { backgroundColor: colors.surfaceSecondary }]}
-                  onPress={() => setTimerModalVisible(true)}
-                >
-                  <Timer size={18} color={colors.text} />
-                  <Text style={[styles.quickActionText, { color: colors.text }]}>Timer</Text>
-                </TouchableOpacity>
+                <AppButton colors={colors} label="Timer" variant="secondary" onPress={() => setTimerModalVisible(true)} icon={<Timer size={18} color={colors.text} />} style={styles.quickAction} />
                 
-                <TouchableOpacity 
-                  style={[styles.quickAction, { backgroundColor: colors.surfaceSecondary }]}
-                  onPress={() => setNoteModalVisible(true)}
-                >
-                  <MapPin size={18} color={colors.text} />
-                  <Text style={[styles.quickActionText, { color: colors.text }]}>Note</Text>
-                </TouchableOpacity>
+                <AppButton colors={colors} label="Note" variant="secondary" onPress={() => setNoteModalVisible(true)} icon={<MapPin size={18} color={colors.text} />} style={styles.quickAction} />
                 
-                <TouchableOpacity 
-                  style={[styles.quickAction, { backgroundColor: colors.surfaceSecondary }]}
-                  onPress={handleShareLocation}
-                >
-                  <Share2 size={18} color={colors.text} />
-                  <Text style={[styles.quickActionText, { color: colors.text }]}>Share</Text>
-                </TouchableOpacity>
+                <AppButton colors={colors} label="Share" variant="secondary" onPress={handleShareLocation} icon={<Share2 size={18} color={colors.text} />} style={styles.quickAction} />
                 
-                <TouchableOpacity 
-                  style={[styles.quickAction, { backgroundColor: colors.surfaceSecondary }]}
-                  onPress={handleNavigateToCar}
-                >
-                  <MoreHorizontal size={18} color={colors.text} />
-                  <Text style={[styles.quickActionText, { color: colors.text }]}>Map</Text>
-                </TouchableOpacity>
+                <AppButton colors={colors} label="Map" variant="secondary" onPress={handleNavigateToCar} icon={<MoreHorizontal size={18} color={colors.text} />} style={styles.quickAction} />
               </View>
             </>
           ) : (
@@ -529,23 +440,13 @@ export default function HomeScreen() {
               </View>
             </>
           )}
+          </AppCard>
         </Animated.View>
 
         {/* Stats Summary */}
         {parkingStats.totalParkings > 0 && (
-          <Animated.View 
-            style={[
-              styles.statsCard,
-              { 
-                backgroundColor: colors.card,
-                shadowColor: colors.shadow,
-                transform: [{ translateY: slideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [50, 0]
-                }) }]
-              }
-            ]}
-          >
+          <Animated.View style={[styles.statsCard, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }] }]}>
+            <AppCard colors={colors} elevated="md">
             <View style={styles.statsHeader}>
               <TrendingUp size={20} color={colors.accent} />
               <Text style={[styles.statsTitle, { color: colors.text }]}>Your Stats</Text>
@@ -570,6 +471,7 @@ export default function HomeScreen() {
                 </Text>
               </View>
             </View>
+            </AppCard>
           </Animated.View>
         )}
 
@@ -582,25 +484,15 @@ export default function HomeScreen() {
             }) }]
           }}
         >
-          <TouchableOpacity 
-            style={[styles.saveButton, { backgroundColor: colors.accent }]}
+          <AppButton
+            colors={colors}
             onPress={handleSaveParking}
             disabled={isLoading}
-            activeOpacity={0.85}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <>
-                <View style={styles.saveButtonIcon}>
-                  <Plus size={24} color={colors.accent} />
-                </View>
-                <Text style={styles.saveButtonText}>
-                  {currentParking ? 'Update Location' : 'Save Parking Spot'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+            variant="primary"
+            style={styles.saveButton}
+            icon={isLoading ? <ActivityIndicator color={colors.textOnAccent} /> : <View style={[styles.saveButtonIcon, { backgroundColor: colors.surface }]}><Plus size={24} color={colors.accent} /></View>}
+            label={isLoading ? 'Saving...' : currentParking ? 'Update Location' : 'Save Parking Spot'}
+          />
         </Animated.View>
       </ScrollView>
 
