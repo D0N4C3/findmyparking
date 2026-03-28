@@ -136,16 +136,22 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
   const [, setHeading] = useState(0);
-  const [isNavigating, setIsNavigating] = useState(false);
-  const [routeSteps, setRouteSteps] = useState<RouteStep[]>([]);
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [navigationState, setNavigationState] = useState({
+    isActive: false,
+    routeSteps: [] as RouteStep[],
+    currentStepIndex: 0,
+  });
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const slideAnim = useRef(new Animated.Value(100)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const navigationInterval = useRef<NodeJS.Timeout | null>(null);
+  const navigationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const arrivalNotifiedRef = useRef(false);
   const [mapBoundaryKey, setMapBoundaryKey] = useState(0);
   const didLogRenderPath = useRef(false);
   const didLogMount = useRef(false);
+  const isNavigating = navigationState.isActive;
+  const routeSteps = navigationState.routeSteps;
+  const currentStepIndex = navigationState.currentStepIndex;
 
   useEffect(() => {
     Animated.timing(slideAnim, {
@@ -285,30 +291,19 @@ export default function MapScreen() {
       showError(DIALOG_COPY.prompts.noParkingSaved.title, DIALOG_COPY.prompts.noParkingSaved.message);
       return;
     }
-    
-    setIsNavigating(true);
-    
-    // Calculate initial route steps
+
     const steps = calculateRouteSteps(currentLocation, {
       latitude: currentParking.latitude,
       longitude: currentParking.longitude
     });
-    setRouteSteps(steps);
-    setCurrentStepIndex(0);
-    
-    // Start navigation tracking
-    navigationInterval.current = setInterval(() => {
-      // Update current step based on distance
-      const dist = getDistanceToCar();
-      if (dist !== null && dist < 20) {
-        // Arrived
-        setCurrentStepIndex(steps.length - 1);
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else if (dist !== null && steps.length > 2 && dist < steps[0].distance + steps[1].distance) {
-        setCurrentStepIndex(1);
-      }
-    }, 3000);
-    
+
+    arrivalNotifiedRef.current = false;
+    setNavigationState({
+      isActive: true,
+      routeSteps: steps,
+      currentStepIndex: 0,
+    });
+
     // Center on user and start following
     if (mapRef.current) {
       mapRef.current.animateToRegion({
@@ -318,12 +313,15 @@ export default function MapScreen() {
         longitudeDelta: 0.002,
       }, 500);
     }
-  }, [calculateRouteSteps, currentLocation, currentParking, getDistanceToCar, showError]);
+  }, [calculateRouteSteps, currentLocation, currentParking, showError]);
 
   const stopNavigation = useCallback(() => {
-    setIsNavigating(false);
-    setRouteSteps([]);
-    setCurrentStepIndex(0);
+    arrivalNotifiedRef.current = false;
+    setNavigationState({
+      isActive: false,
+      routeSteps: [],
+      currentStepIndex: 0,
+    });
     if (navigationInterval.current) {
       clearInterval(navigationInterval.current);
       navigationInterval.current = null;
@@ -336,12 +334,51 @@ export default function MapScreen() {
   }, []);
 
   useEffect(() => {
+    if (!navigationState.isActive) {
+      if (navigationInterval.current) {
+        clearInterval(navigationInterval.current);
+        navigationInterval.current = null;
+      }
+      return;
+    }
+
+    if (!currentParking || !currentLocation || navigationState.routeSteps.length === 0) {
+      stopNavigation();
+      return;
+    }
+
+    navigationInterval.current = setInterval(() => {
+      const dist = getDistanceToCar();
+      if (dist === null) return;
+
+      if (dist < 20 && !arrivalNotifiedRef.current) {
+        arrivalNotifiedRef.current = true;
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+
+      setNavigationState((prev) => {
+        if (!prev.isActive || prev.routeSteps.length === 0) return prev;
+
+        let nextStepIndex = 0;
+        if (dist < 20) {
+          nextStepIndex = prev.routeSteps.length - 1;
+        } else if (prev.routeSteps.length > 2 && dist < prev.routeSteps[0].distance + prev.routeSteps[1].distance) {
+          nextStepIndex = 1;
+        }
+
+        return nextStepIndex === prev.currentStepIndex
+          ? prev
+          : { ...prev, currentStepIndex: nextStepIndex };
+      });
+    }, 3000);
+
     return () => {
       if (navigationInterval.current) {
         clearInterval(navigationInterval.current);
+        navigationInterval.current = null;
       }
     };
-  }, []);
+  }, [currentLocation, currentParking, getDistanceToCar, navigationState.isActive, navigationState.routeSteps.length, stopNavigation]);
 
   const handleShareLocation = useCallback(async () => {
     if (!currentParking) {
