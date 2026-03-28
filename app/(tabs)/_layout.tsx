@@ -2,6 +2,7 @@ import { Tabs } from "expo-router";
 import { Home, Clock, Settings, Compass } from "lucide-react-native";
 import React from "react";
 import { View, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Colors } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
@@ -32,6 +33,11 @@ function TabIcon({
 export default function TabLayout() {
   const { isDark } = useTheme();
   const colors = isDark ? Colors.dark : Colors.light;
+  const insets = useSafeAreaInsets();
+
+  const tabBarBaseHeight = 84;
+  const tabBarTopPadding = 8;
+  const minimumBottomPadding = 10;
 
   return (
     <Tabs
@@ -39,15 +45,17 @@ export default function TabLayout() {
         headerShown: false,
         tabBarStyle: {
           backgroundColor: colors.card,
-          borderTopWidth: 0,
+          position: "absolute",
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: colors.border,
           elevation: 0,
           shadowColor: colors.shadow,
           shadowOffset: { width: 0, height: -4 },
           shadowOpacity: 0.1,
           shadowRadius: 12,
-          height: 84,
-          paddingTop: 8,
-          paddingBottom: 10,
+          height: tabBarBaseHeight + insets.bottom,
+          paddingTop: tabBarTopPadding,
+          paddingBottom: Math.max(insets.bottom, minimumBottomPadding),
         },
         tabBarItemStyle: {
           justifyContent: 'center',
