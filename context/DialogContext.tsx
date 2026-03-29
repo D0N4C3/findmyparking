@@ -56,7 +56,8 @@ interface DialogApi {
 const DialogContext = createContext<DialogApi | null>(null);
 
 export function DialogProvider({ children }: { children: ReactNode }) {
-  const { isDark } = useTheme();
+  const theme = useTheme();
+  const isDark = theme?.isDark ?? false;
   const colors = isDark ? Colors.dark : Colors.light;
   const [dialog, setDialog] = useState<DialogPayload | null>(null);
 

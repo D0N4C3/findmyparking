@@ -175,7 +175,8 @@ export default function HomeScreen() {
     isTimerActive,
     updateParkingSpot,
   } = useParking();
-  const { isDark } = useTheme();
+  const theme = useTheme();
+  const isDark = theme?.isDark ?? false;
   const insets = useSafeAreaInsets();
   const colors = isDark ? Colors.dark : Colors.light;
   const router = useRouter();
