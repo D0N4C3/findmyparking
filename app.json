@@ -17,11 +17,11 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.interethiopia.findmyparking",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "ParkPing needs your location to save your parking spot and guide you back to your car.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "ParkPing uses background location to support optional car auto-detection and reminders.",
-        "NSUserNotificationUsageDescription": "ParkPing sends parking reminders and timer alerts.",
-        "NSBluetoothAlwaysUsageDescription": "ParkPing uses Bluetooth to detect when your car disconnects so it can save your parking location.",
-        "NSBluetoothPeripheralUsageDescription": "ParkPing uses Bluetooth to detect when your car disconnects so it can save your parking location."
+        "NSLocationWhenInUseUsageDescription": "CarPing needs your location to save your parking spot and guide you back to your car.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "CarPing uses background location to support optional car auto-detection and reminders.",
+        "NSUserNotificationUsageDescription": "CarPing sends parking reminders and timer alerts.",
+        "NSBluetoothAlwaysUsageDescription": "CarPing uses Bluetooth to detect when your car disconnects so it can save your parking location.",
+        "NSBluetoothPeripheralUsageDescription": "CarPing uses Bluetooth to detect when your car disconnects so it can save your parking location."
       }
     },
     "android": {

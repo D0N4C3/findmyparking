@@ -70,7 +70,7 @@ export default function OnboardingScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {step === 0 ? (
           <View style={styles.stepContainer}>
-            <Text style={[styles.title, { color: colors.text }]}>Welcome to ParkPing 👋</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Welcome to CarPing 👋</Text>
             <Text style={[styles.subtitle, { color: colors.textMuted }]}>Save your parking spot instantly and find your car without stress.</Text>
             <AppCard colors={colors} style={styles.card}>
               <Text style={[styles.cardTitle, { color: colors.text }]}>What you get</Text>

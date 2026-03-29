@@ -62,6 +62,14 @@ interface RouteStep {
   maneuver: string;
 }
 
+interface RouteCacheEntry {
+  from: { latitude: number; longitude: number };
+  to: { latitude: number; longitude: number };
+  fetchedAt: number;
+  geometry: { latitude: number; longitude: number }[];
+  steps: RouteStep[];
+}
+
 interface MapRenderBoundaryProps {
   colors: typeof Colors.light;
   onRetry: () => void;
@@ -148,10 +156,14 @@ export default function MapScreen() {
     currentStepIndex: 0,
   });
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [routeMode, setRouteMode] = useState<'routing' | 'fallback'>('routing');
+  const [routeWarning, setRouteWarning] = useState<string | null>(null);
+  const [navigationRouteCoordinates, setNavigationRouteCoordinates] = useState<{ latitude: number; longitude: number }[]>([]);
   const slideAnim = useRef(new Animated.Value(100)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const navigationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const arrivalNotifiedRef = useRef(false);
+  const lastRouteCache = useRef<RouteCacheEntry | null>(null);
   const [mapBoundaryKey, setMapBoundaryKey] = useState(0);
   const didLogRenderPath = useRef(false);
   const didLogMount = useRef(false);
@@ -255,7 +267,7 @@ export default function MapScreen() {
     }
   }, [currentParking]);
 
-  const calculateRouteSteps = useCallback((from: Location.LocationObject, to: { latitude: number; longitude: number }): RouteStep[] => {
+  const calculateFallbackRouteSteps = useCallback((from: Location.LocationObject, to: { latitude: number; longitude: number }): RouteStep[] => {
     const distance = getDistanceToCar() || 0;
     const steps: RouteStep[] = [];
     
@@ -299,19 +311,139 @@ export default function MapScreen() {
     return steps;
   }, [getDistanceToCar]);
 
-  const startInAppNavigation = useCallback(() => {
+  const haversineDistanceMeters = useCallback((a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) => {
+    const toRadians = (value: number) => (value * Math.PI) / 180;
+    const earthRadius = 6371000;
+    const dLat = toRadians(b.latitude - a.latitude);
+    const dLon = toRadians(b.longitude - a.longitude);
+    const lat1 = toRadians(a.latitude);
+    const lat2 = toRadians(b.latitude);
+    const sinLat = Math.sin(dLat / 2);
+    const sinLon = Math.sin(dLon / 2);
+    const arc = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLon * sinLon;
+    return 2 * earthRadius * Math.atan2(Math.sqrt(arc), Math.sqrt(1 - arc));
+  }, []);
+
+  const decodePolyline = useCallback((encoded: string) => {
+    const coordinates: { latitude: number; longitude: number }[] = [];
+    let index = 0;
+    let lat = 0;
+    let lng = 0;
+    while (index < encoded.length) {
+      let shift = 0;
+      let result = 0;
+      let byte = 0;
+      do {
+        byte = encoded.charCodeAt(index++) - 63;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20);
+      const latitudeChange = (result & 1) ? ~(result >> 1) : result >> 1;
+      lat += latitudeChange;
+      shift = 0;
+      result = 0;
+      do {
+        byte = encoded.charCodeAt(index++) - 63;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20);
+      const longitudeChange = (result & 1) ? ~(result >> 1) : result >> 1;
+      lng += longitudeChange;
+      coordinates.push({
+        latitude: lat / 1e5,
+        longitude: lng / 1e5,
+      });
+    }
+    return coordinates;
+  }, []);
+
+  const fetchWalkingRoute = useCallback(async (from: Location.LocationObject, to: { latitude: number; longitude: number }) => {
+    const start = { latitude: from.coords.latitude, longitude: from.coords.longitude };
+    const now = Date.now();
+    const cached = lastRouteCache.current;
+    if (
+      cached &&
+      now - cached.fetchedAt < 90_000 &&
+      haversineDistanceMeters(start, cached.from) < 25 &&
+      haversineDistanceMeters(to, cached.to) < 10
+    ) {
+      return { ...cached, from: start, to };
+    }
+
+    const endpoint = `https://router.project-osrm.org/route/v1/walking/${start.longitude},${start.latitude};${to.longitude},${to.latitude}?overview=full&geometries=polyline&steps=true`;
+    const response = await fetch(endpoint);
+    if (!response.ok) {
+      throw new Error(`Routing request failed with status ${response.status}`);
+    }
+    const payload = await response.json();
+    if (payload?.code !== 'Ok' || !payload?.routes?.[0]) {
+      throw new Error('Routing response was invalid');
+    }
+    const route = payload.routes[0];
+    const geometry = decodePolyline(route.geometry);
+    const apiSteps = route.legs?.[0]?.steps ?? [];
+    const steps: RouteStep[] = apiSteps.length > 0
+      ? apiSteps.map((step: { distance?: number; name?: string; maneuver?: { type?: string; modifier?: string } }) => {
+          const maneuverType = step?.maneuver?.type ?? 'continue';
+          const modifier = step?.maneuver?.modifier ? ` ${step.maneuver.modifier}` : '';
+          const roadName = step?.name ? ` onto ${step.name}` : '';
+          const instruction = `${maneuverType.charAt(0).toUpperCase()}${maneuverType.slice(1)}${modifier}${roadName}`.trim();
+          return {
+            instruction,
+            distance: Math.max(1, Math.round(step?.distance ?? 0)),
+            maneuver: maneuverType,
+          };
+        })
+      : [{
+          instruction: 'Continue to your car',
+          distance: Math.max(1, Math.round(route.distance ?? 0)),
+          maneuver: 'continue',
+        }];
+
+    const nextCache: RouteCacheEntry = {
+      from: start,
+      to,
+      fetchedAt: now,
+      geometry,
+      steps,
+    };
+    lastRouteCache.current = nextCache;
+    return nextCache;
+  }, [decodePolyline, haversineDistanceMeters]);
+
+  const startInAppNavigation = useCallback(async () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!currentParking || !currentLocation) {
       showError(DIALOG_COPY.prompts.noParkingSaved.title, DIALOG_COPY.prompts.noParkingSaved.message);
       return;
     }
-
-    const steps = calculateRouteSteps(currentLocation, {
+    const destination = {
       latitude: currentParking.latitude,
-      longitude: currentParking.longitude
-    });
+      longitude: currentParking.longitude,
+    };
+    let steps: RouteStep[] = [];
+    let routeCoordinates: { latitude: number; longitude: number }[] = [];
+    let mode: 'routing' | 'fallback' = 'routing';
+    let warning: string | null = null;
+    try {
+      const route = await fetchWalkingRoute(currentLocation, destination);
+      steps = route.steps;
+      routeCoordinates = route.geometry;
+    } catch (error) {
+      console.warn('Routing request failed; falling back to straight-line navigation.', error);
+      steps = calculateFallbackRouteSteps(currentLocation, destination);
+      routeCoordinates = [
+        { latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude },
+        destination,
+      ];
+      mode = 'fallback';
+      warning = 'Live route data is unavailable right now. Showing straight-line guidance.';
+    }
 
     arrivalNotifiedRef.current = false;
+    setRouteMode(mode);
+    setRouteWarning(warning);
+    setNavigationRouteCoordinates(routeCoordinates);
     setNavigationState({
       isActive: true,
       routeSteps: steps,
@@ -327,7 +459,7 @@ export default function MapScreen() {
         longitudeDelta: 0.002,
       }, 500);
     }
-  }, [calculateRouteSteps, currentLocation, currentParking, showError]);
+  }, [calculateFallbackRouteSteps, currentLocation, currentParking, fetchWalkingRoute, showError]);
 
   const stopNavigation = useCallback(() => {
     arrivalNotifiedRef.current = false;
@@ -336,6 +468,9 @@ export default function MapScreen() {
       routeSteps: [],
       currentStepIndex: 0,
     });
+    setRouteWarning(null);
+    setNavigationRouteCoordinates([]);
+    setRouteMode('routing');
     if (navigationInterval.current) {
       clearInterval(navigationInterval.current);
       navigationInterval.current = null;
@@ -572,19 +707,21 @@ export default function MapScreen() {
               )}
               {canRenderPolyline && currentParking && currentLocation && (
                 <Polyline
-                  coordinates={[
-                    {
-                      latitude: currentLocation.coords.latitude,
-                      longitude: currentLocation.coords.longitude,
-                    },
-                    {
-                      latitude: currentParking.latitude,
-                      longitude: currentParking.longitude,
-                    },
-                  ]}
+                  coordinates={isNavigating && navigationRouteCoordinates.length > 1
+                    ? navigationRouteCoordinates
+                    : [
+                        {
+                          latitude: currentLocation.coords.latitude,
+                          longitude: currentLocation.coords.longitude,
+                        },
+                        {
+                          latitude: currentParking.latitude,
+                          longitude: currentParking.longitude,
+                        },
+                      ]}
                   strokeColor={colors.accent}
                   strokeWidth={4}
-                  lineDashPattern={[8, 6]}
+                  lineDashPattern={isNavigating && routeMode === 'routing' ? undefined : [8, 6]}
                 />
               )}
             </MapView>
@@ -695,6 +832,11 @@ export default function MapScreen() {
                 )}
               </TouchableOpacity>
             </View>
+            {routeWarning && (
+              <Text style={[styles.routeWarningText, { color: colors.warning }]}>
+                {routeWarning}
+              </Text>
+            )}
           </Animated.View>
         )}
       </View>
@@ -1034,6 +1176,11 @@ const styles = StyleSheet.create({
   },
   navInfoText: {
     fontSize: 14,
+    fontWeight: '600',
+  },
+  routeWarningText: {
+    marginTop: 10,
+    fontSize: 12,
     fontWeight: '600',
   },
   voiceButton: {

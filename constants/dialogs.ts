@@ -23,14 +23,14 @@ export const DIALOG_COPY = {
       message: 'Please try sharing again.',
     },
     shareApp: {
-      title: 'Unable to share ParkPing',
+      title: 'Unable to share CarPing',
       message: 'Please try again in a moment.',
     },
   },
   permissions: {
     locationRequired: {
       title: 'Location access required',
-      message: 'ParkPing needs location access to save and find your parking spot.',
+      message: 'CarPing needs location access to save and find your parking spot.',
     },
     savePermissionRequired: {
       title: 'Location access required',
