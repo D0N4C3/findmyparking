@@ -130,9 +130,15 @@ export default function MapScreen() {
   const keys = getGoogleKeys();
   const isExpoGo = Constants.appOwnership === 'expo';
 
+  const shouldUseGoogleProvider =
+    Platform.OS === 'android' || (Platform.OS === 'ios' && !isExpoGo && keys.iosDetected);
+
   const needsMapSetup =
-    (Platform.OS === 'android' && !keys.androidDetected && !isExpoGo) ||
-    (Platform.OS === 'ios' && !keys.iosDetected && !isExpoGo);
+    Platform.OS === 'android'
+      ? !keys.androidDetected && !isExpoGo
+      : Platform.OS === 'ios'
+        ? !keys.iosDetected && !isExpoGo
+        : false;
 
   const initialRegion = useMemo(() => {
     if (currentLocation) {
@@ -321,7 +327,7 @@ export default function MapScreen() {
           ref={mapRef}
           style={styles.map}
           initialRegion={initialRegion}
-          provider={Platform.OS === 'android' || Platform.OS === 'ios' ? PROVIDER_GOOGLE : undefined}
+          provider={shouldUseGoogleProvider ? PROVIDER_GOOGLE : undefined}
           mapType={mapType}
           showsUserLocation={Platform.OS !== 'web'}
           showsMyLocationButton={false}
@@ -357,7 +363,7 @@ export default function MapScreen() {
             <Text style={[styles.setupBody, { color: colors.textSecondary }]}>
               iOS key ({CANONICAL_IOS_KEY}): {keys.iosDetected ? 'Detected' : 'Missing'}
             </Text>
-            <Text style={[styles.setupHint, { color: colors.textMuted }]}>Expo Go cannot use native Google key injection.</Text>
+            <Text style={[styles.setupHint, { color: colors.textMuted }]}>Expo Go and iOS without a native key will fall back to Apple Maps automatically.</Text>
           </View>
         )}
 
