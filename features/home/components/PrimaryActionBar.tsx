@@ -1,7 +1,7 @@
 import { AppPrimaryButton } from '@/components/ui/primitives';
 import { HomeViewModel } from '@/features/home/home-view-model';
 import { ChevronRight, Navigation, Plus } from 'lucide-react-native';
-import { ActivityIndicator, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 interface PrimaryActionBarProps {
   viewModel: HomeViewModel;
@@ -36,9 +36,10 @@ export function PrimaryActionBar({ viewModel, onSaveParking, onNavigateExternal 
       colors={colors}
       onPress={onSaveParking}
       disabled={isLoading}
+      loading={isLoading}
       style={styles.primaryAction}
-      icon={isLoading ? <ActivityIndicator color={colors.textOnAccent} /> : <Plus size={20} color={colors.textOnAccent} />}
-      label={isLoading ? 'Saving...' : 'Save Parking Spot'}
+      icon={<Plus size={20} color={colors.textOnAccent} />}
+      label="Save Parking Spot"
     />
   );
 }

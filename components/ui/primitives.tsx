@@ -39,6 +39,7 @@ interface AppButtonProps {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   style?: StyleProp<ViewStyle>;
   disabled?: boolean;
+  loading?: boolean;
 }
 
 export function AppButton({
@@ -50,22 +51,32 @@ export function AppButton({
   variant = 'secondary',
   style,
   disabled,
+  loading,
 }: AppButtonProps) {
+  const isDisabled = disabled || loading;
   const palette = {
     primary: {
-      backgroundColor: colors.accent,
+      backgroundColor: colors.accentPrimary,
+      pressedBackgroundColor: colors.primaryLight,
+      disabledBackgroundColor: colors.accentSoft,
       color: colors.textOnAccent,
     },
     secondary: {
       backgroundColor: colors.surfaceSecondary,
-      color: colors.text,
+      pressedBackgroundColor: colors.surfaceTertiary,
+      disabledBackgroundColor: colors.surfaceSecondary,
+      color: colors.textPrimary ?? colors.text,
     },
     ghost: {
       backgroundColor: 'transparent',
-      color: colors.text,
+      pressedBackgroundColor: colors.accentSoft,
+      disabledBackgroundColor: 'transparent',
+      color: colors.textPrimary ?? colors.text,
     },
     danger: {
       backgroundColor: colors.error,
+      pressedBackgroundColor: colors.errorLight,
+      disabledBackgroundColor: colors.errorLight,
       color: colors.textOnAccent,
     },
   }[variant];
@@ -74,14 +85,22 @@ export function AppButton({
     <Pressable
       style={({ pressed }) => [
         styles.button,
-        { backgroundColor: palette.backgroundColor, opacity: disabled ? 0.5 : pressed ? 0.85 : 1 },
+        {
+          backgroundColor: isDisabled
+            ? palette.disabledBackgroundColor
+            : pressed
+              ? palette.pressedBackgroundColor
+              : palette.backgroundColor,
+          borderColor: variant === 'ghost' ? colors.border : 'transparent',
+          opacity: isDisabled ? 0.65 : 1,
+        },
         style,
       ]}
       onPress={onPress}
-      disabled={disabled}
+      disabled={isDisabled}
     >
       {icon}
-      {label ? <Text style={[styles.buttonText, { color: palette.color }]}>{label}</Text> : null}
+      {label ? <Text style={[styles.buttonText, { color: palette.color }]}>{loading ? 'Loading...' : label}</Text> : null}
       {trailingIcon}
     </Pressable>
   );
@@ -117,9 +136,9 @@ interface StatTileProps {
 
 export function StatTile({ colors, icon, value, label, style }: StatTileProps) {
   return (
-    <View style={[styles.statTile, { backgroundColor: colors.surfaceSecondary }, style]}>
+    <View style={[styles.statTile, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }, style]}>
       {icon}
-      <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
+      <Text style={[styles.statValue, { color: colors.textPrimary ?? colors.text }]}>{value}</Text>
       <Text style={[styles.statLabel, { color: colors.textMuted }]}>{label}</Text>
     </View>
   );
@@ -160,7 +179,7 @@ interface InfoTileProps {
 
 export function InfoTile({ colors, icon, children, style }: InfoTileProps) {
   return (
-    <View style={[styles.infoTile, { backgroundColor: colors.card, borderColor: colors.border }, style]}>
+    <View style={[styles.infoTile, { backgroundColor: colors.surfacePrimary ?? colors.card, borderColor: colors.border }, style]}>
       {icon}
       {children}
     </View>
@@ -169,15 +188,17 @@ export function InfoTile({ colors, icon, children, style }: InfoTileProps) {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: radius.xl,
+    borderRadius: radius.hero,
     padding: spacing.lg,
+    borderWidth: 1,
   },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    borderRadius: radius.md,
+    borderRadius: radius.standard,
+    borderWidth: 1,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
@@ -201,7 +222,8 @@ const styles = StyleSheet.create({
   },
   statTile: {
     flex: 1,
-    borderRadius: radius.md,
+    borderRadius: radius.standard,
+    borderWidth: 1,
     alignItems: 'center',
     paddingVertical: spacing.sm,
     gap: spacing.xxs,
@@ -217,7 +239,7 @@ const styles = StyleSheet.create({
   infoTile: {
     flex: 1,
     borderWidth: 1,
-    borderRadius: radius.md,
+    borderRadius: radius.standard,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
