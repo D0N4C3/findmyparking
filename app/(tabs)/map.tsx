@@ -24,6 +24,7 @@ import {
   Share,
   Platform,
   Linking,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
@@ -31,6 +32,7 @@ import { Component, ReactNode, useCallback, useEffect, useMemo, useRef, useState
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
+import Constants from 'expo-constants';
 import { AppButton, SectionHeader, StatTile } from '@/components/ui/primitives';
 import { useDialog } from '@/context/DialogContext';
 import { DIALOG_COPY } from '@/constants/dialogs';
@@ -215,6 +217,12 @@ export default function MapScreen() {
   const walkingTime = getWalkingTimeToCar();
   const directionArrow = direction !== null ? getDirectionArrow(direction) : '•';
   const directionLabel = direction !== null ? getDirectionLabel(direction) : 'Unknown';
+  const screenHeight = Dimensions.get('window').height;
+  const bottomPanelPeekHeight = Math.min(Math.max(screenHeight * 0.28, 220), 300);
+  const googleMapsApiKey =
+    Constants.expoConfig?.android?.config?.googleMaps?.apiKey ??
+    Constants.manifest2?.extra?.expoClient?.android?.config?.googleMaps?.apiKey;
+  const isAndroidMapKeyMissing = Platform.OS === 'android' && !googleMapsApiKey;
 
   const handleRecenter = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -492,17 +500,26 @@ export default function MapScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Header */}
-      <SectionHeader
-        colors={colors}
-        title="Find Your Car"
-        subtitle={distance !== null ? `${formatDistance(distance)} away` : 'Save your parking spot'}
-        right={<AppButton colors={colors} onPress={() => { void handleShareLocation(); }} icon={<Share2 size={20} color={colors.text} />} variant="secondary" style={styles.iconButton} />}
-        style={[styles.header, { backgroundColor: colors.background }]}
+      <LinearGradient
+        colors={[colors.background, colors.surfaceSecondary]}
+        style={styles.topBackdrop}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 0.8, y: 1 }}
       />
 
+      {/* Header */}
+      <View style={styles.headerWrap}>
+        <SectionHeader
+          colors={colors}
+          title="Find Your Car"
+          subtitle={distance !== null ? `${formatDistance(distance)} away` : 'Save your parking spot'}
+          right={<AppButton colors={colors} onPress={() => { void handleShareLocation(); }} icon={<Share2 size={20} color={colors.text} />} variant="secondary" style={styles.iconButton} />}
+          style={[styles.header, { backgroundColor: colors.card }]}
+        />
+      </View>
+
       {/* Map */}
-      <View style={styles.mapContainer}>
+      <View style={[styles.mapContainer, { marginBottom: bottomPanelPeekHeight - 34 }]}>
         <MapRenderBoundary
           key={mapBoundaryKey}
           colors={colors}
@@ -575,6 +592,15 @@ export default function MapScreen() {
             </View>
           )}
         </MapRenderBoundary>
+
+        {isAndroidMapKeyMissing && (
+          <View style={[styles.mapWarningCard, { backgroundColor: colors.card }]}>
+            <Text style={[styles.mapWarningTitle, { color: colors.text }]}>Map setup required</Text>
+            <Text style={[styles.mapWarningSubtitle, { color: colors.textSecondary }]}>
+              Google Maps key is missing for Android. Add GOOGLE_ANDROID_GEO_API_KEY before building to prevent the gray map.
+            </Text>
+          </View>
+        )}
 
         {/* Map Controls */}
         <View style={styles.mapControls}>
@@ -674,7 +700,8 @@ export default function MapScreen() {
           styles.bottomPanel, 
           { 
             backgroundColor: colors.card,
-            transform: [{ translateY: slideAnim }]
+            transform: [{ translateY: slideAnim }],
+            minHeight: bottomPanelPeekHeight,
           }
         ]}
       >
@@ -748,36 +775,54 @@ export default function MapScreen() {
 }
 
 const darkMapStyle = [
-  { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
-  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
-  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#263c3f' }] },
-  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#6b9a76' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#38414e' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#212a37' }] },
-  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#9ca5b3' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#746855' }] },
-  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#1f2835' }] },
-  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#f3d19c' }] },
-  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#2f3948' }] },
-  { featureType: 'transit.station', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#17263c' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#515c6d' }] },
-  { featureType: 'water', elementType: 'labels.text.stroke', stylers: [{ color: '#17263c' }] },
+  { elementType: 'geometry', stylers: [{ color: '#1f2634' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#1f2634' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#8997ad' }] },
+  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#b8c3d6' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#232d3f' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#9cabbe' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#213a3f' }] },
+  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#82b19a' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#364258' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#2b3448' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#d2d8e4' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#54627a' }] },
+  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#323f56' }] },
+  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#f3f6fb' }] },
+  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#2f3c53' }] },
+  { featureType: 'transit.station', elementType: 'labels.text.fill', stylers: [{ color: '#bac4d5' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#193a55' }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#7da4c8' }] },
 ];
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  topBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 220,
+  },
+  headerWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 8,
   },
   headerTitle: {
     fontSize: 28,
@@ -798,6 +843,11 @@ const styles = StyleSheet.create({
   mapContainer: {
     flex: 1,
     position: 'relative',
+    marginHorizontal: 16,
+    borderRadius: 30,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   map: {
     ...StyleSheet.absoluteFillObject,
@@ -838,14 +888,37 @@ const styles = StyleSheet.create({
   },
   mapControls: {
     position: 'absolute',
-    right: 16,
-    top: 16,
-    gap: 10,
+    right: 14,
+    top: 14,
+    gap: 12,
+  },
+  mapWarningCard: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    top: 14,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
+    gap: 4,
+  },
+  mapWarningTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  mapWarningSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   controlButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -868,7 +941,7 @@ const styles = StyleSheet.create({
   },
   navigationOverlay: {
     position: 'absolute',
-    top: 60,
+    top: 76,
     left: 16,
     right: 16,
     borderRadius: 24,
@@ -965,14 +1038,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   bottomPanel: {
-    padding: 24,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
+    marginHorizontal: 8,
+    marginBottom: 8,
+    paddingHorizontal: 22,
+    paddingTop: 18,
+    paddingBottom: 20,
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    borderBottomLeftRadius: 26,
+    borderBottomRightRadius: 26,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.14,
     shadowRadius: 16,
     elevation: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
   directionSection: {
     flexDirection: 'row',
@@ -1021,7 +1102,7 @@ const styles = StyleSheet.create({
   quickStats: {
     flexDirection: 'row',
     padding: 14,
-    borderRadius: 16,
+    borderRadius: 18,
     marginBottom: 16,
   },
   quickStat: {
