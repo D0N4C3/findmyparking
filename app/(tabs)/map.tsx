@@ -30,6 +30,7 @@ import {
   MapPinned,
   LocateFixed,
   Timer,
+  XCircle,
 } from 'lucide-react-native';
 
 type RouteStep = {
@@ -111,8 +112,8 @@ function getGoogleKeys() {
 }
 
 export default function MapScreen() {
-  const { currentParking, currentLocation, getDistanceToCar, getWalkingTimeToCar } = useParking();
-  const { showError } = useDialog();
+  const { currentParking, currentLocation, getDistanceToCar, getWalkingTimeToCar, endParkingSession } = useParking();
+  const { showError, showDestructive } = useDialog();
   const theme = useTheme();
   const isDark = theme?.isDark ?? false;
   const colors = isDark ? Colors.dark : Colors.light;
@@ -307,6 +308,22 @@ export default function MapScreen() {
     }
   }, [currentParking, showError]);
 
+  const handleEndSession = useCallback(() => {
+    if (!currentParking) return;
+
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    showDestructive({
+      title: 'End parking session?',
+      message: 'Your active parking location will be archived in history.',
+      confirmLabel: 'End Session',
+      onConfirm: () => {
+        void endParkingSession();
+        setNavigationSteps([]);
+        setRouteCoordinates([]);
+      },
+    });
+  }, [currentParking, endParkingSession, showDestructive]);
+
   const firstStep = navigationSteps[0];
 
   return (
@@ -435,6 +452,15 @@ export default function MapScreen() {
             <Text style={[styles.primaryActionLabel, { color: colors.textOnAccent }]}>{isLoadingRoute ? 'Building...' : 'Build Route'}</Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={[styles.endSessionAction, { backgroundColor: colors.surfaceSecondary }]}
+          onPress={handleEndSession}
+          disabled={!currentParking}
+        >
+          <XCircle size={17} color={currentParking ? colors.error : colors.textMuted} />
+          <Text style={[styles.endSessionLabel, { color: currentParking ? colors.error : colors.textMuted }]}>End Session</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -475,7 +501,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   mapWrap: {
-    flex: 1,
+    flex: 1.2,
     position: 'relative',
   },
   map: {
@@ -534,7 +560,7 @@ const styles = StyleSheet.create({
   bottomSheet: {
     borderTopWidth: 1,
     paddingHorizontal: 16,
-    paddingTop: 14,
+    paddingTop: 20,
     gap: 12,
   },
   metricsRow: {
@@ -605,6 +631,19 @@ const styles = StyleSheet.create({
   },
   primaryActionLabel: {
     fontSize: 14,
+    fontWeight: '700',
+  },
+  endSessionAction: {
+    minHeight: 44,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  endSessionLabel: {
+    fontSize: 13,
     fontWeight: '700',
   },
 });

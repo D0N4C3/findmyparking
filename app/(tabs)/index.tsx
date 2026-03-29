@@ -172,6 +172,7 @@ export default function HomeScreen() {
     parkingStats,
     setParkingTimer,
     clearParkingTimer,
+    endParkingSession,
     timerRemaining,
     isTimerActive,
     updateParkingSpot,
@@ -181,7 +182,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const colors = isDark ? Colors.dark : Colors.light;
   const router = useRouter();
-  const { showError } = useDialog();
+  const { showError, showDestructive } = useDialog();
   const { width } = useWindowDimensions();
 
   const breakpoint = width < 360 ? 'compact' : width <= 480 ? 'standard' : 'expanded';
@@ -315,6 +316,20 @@ export default function HomeScreen() {
     }
   }, [currentParking, updateParkingSpot]);
 
+  const handleEndSession = useCallback(() => {
+    if (!currentParking) return;
+
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    showDestructive({
+      title: 'End parking session?',
+      message: 'Your active parking will be moved to history so you can start a new one anytime.',
+      confirmLabel: 'End Session',
+      onConfirm: () => {
+        void endParkingSession();
+      },
+    });
+  }, [currentParking, endParkingSession, showDestructive]);
+
   const distance = getDistanceToCar();
   const walkingTime = getWalkingTimeToCar();
   const parkingAgeMs = currentParking ? Date.now() - currentParking.timestamp : 0;
@@ -384,6 +399,7 @@ export default function HomeScreen() {
               onOpenNote={() => setNoteModalVisible(true)}
               onOpenMap={handleNavigateToCar}
               onOpenTimer={() => setTimerModalVisible(true)}
+              onEndSession={handleEndSession}
               breakpoint={breakpoint}
             />
           </Animated.View>
