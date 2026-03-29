@@ -234,12 +234,15 @@ export default function MapScreen() {
   const directionLabel = direction !== null ? getDirectionLabel(direction) : 'Unknown';
   const screenHeight = Dimensions.get('window').height;
   const bottomPanelPeekHeight = Math.min(Math.max(screenHeight * 0.28, 220), 300);
+  const canonicalAndroidMapsEnvKey = 'EXPO_PUBLIC_GOOGLE_ANDROID_GEO_API_KEY';
   const googleMapsApiKey =
     Constants.expoConfig?.android?.config?.googleMaps?.apiKey ??
     Constants.manifest2?.extra?.expoClient?.android?.config?.googleMaps?.apiKey ??
     process.env.EXPO_PUBLIC_GOOGLE_ANDROID_GEO_API_KEY;
   const isExpoGo = Constants.appOwnership === 'expo';
-  const isAndroidMapKeyMissing = Platform.OS === 'android' && !googleMapsApiKey && !isExpoGo;
+  const mapRuntimeLabel = isExpoGo ? 'Expo Go' : 'Custom dev client / standalone';
+  const isAndroidMapKeyDetected = Boolean(googleMapsApiKey);
+  const isAndroidMapKeyMissing = Platform.OS === 'android' && !isAndroidMapKeyDetected && !isExpoGo;
 
   const handleRecenter = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -746,7 +749,13 @@ export default function MapScreen() {
           <View style={[styles.mapWarningCard, { backgroundColor: colors.card }]}>
             <Text style={[styles.mapWarningTitle, { color: colors.text }]}>Map setup required</Text>
             <Text style={[styles.mapWarningSubtitle, { color: colors.textSecondary }]}>
-              Google Maps key is missing for Android. Add GOOGLE_ANDROID_GEO_API_KEY and rebuild your dev client/app (Expo Go cannot load native map keys).
+              Google Maps key is missing for Android. Set {canonicalAndroidMapsEnvKey}, rebuild your dev client/app, and reopen Navigate (Expo Go cannot load native map keys).
+            </Text>
+            <Text style={[styles.mapWarningStatus, { color: colors.textSecondary }]}>
+              Runtime: {mapRuntimeLabel}
+            </Text>
+            <Text style={[styles.mapWarningStatus, { color: colors.textSecondary }]}>
+              Key detected ({canonicalAndroidMapsEnvKey}): {isAndroidMapKeyDetected ? 'Yes' : 'No'}
             </Text>
           </View>
         )}
@@ -1081,6 +1090,11 @@ const styles = StyleSheet.create({
   },
   mapWarningSubtitle: {
     fontSize: 12,
+    lineHeight: 16,
+  },
+  mapWarningStatus: {
+    fontSize: 12,
+    fontWeight: '600',
     lineHeight: 16,
   },
   controlButton: {
