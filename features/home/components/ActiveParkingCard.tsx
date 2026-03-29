@@ -4,9 +4,12 @@ import { AlertCircle, Car, Clock3, LocateFixed, Timer } from 'lucide-react-nativ
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+type HomeBreakpoint = 'compact' | 'standard' | 'expanded';
+
 interface ActiveParkingCardProps {
   viewModel: HomeViewModel;
   onClearTimer: () => void;
+  breakpoint?: HomeBreakpoint;
 }
 
 /**
@@ -15,7 +18,7 @@ interface ActiveParkingCardProps {
  * Usage: bind this to a `HomeViewModel`; the component only displays data and raises
  * timer-clear intent through `onClearTimer`.
  */
-export function ActiveParkingCard({ viewModel, onClearTimer }: ActiveParkingCardProps) {
+export function ActiveParkingCard({ viewModel, onClearTimer, breakpoint = 'standard' }: ActiveParkingCardProps) {
   const {
     colors,
     currentParking,
@@ -30,8 +33,11 @@ export function ActiveParkingCard({ viewModel, onClearTimer }: ActiveParkingCard
     walkingTimeText,
   } = viewModel;
 
+  const isCompact = breakpoint === 'compact';
+  const isExpanded = breakpoint === 'expanded';
+
   return (
-    <AppCard colors={colors} elevated="lg" style={styles.heroCard}>
+    <AppCard colors={colors} elevated="lg" style={[styles.heroCard, isCompact && styles.heroCardCompact, isExpanded && styles.heroCardExpanded]}>
       {currentParking ? (
         <>
           <View style={styles.carSection}>
@@ -49,20 +55,20 @@ export function ActiveParkingCard({ viewModel, onClearTimer }: ActiveParkingCard
             </View>
           </View>
 
-          <Text style={[styles.heroTitle, { color: colors.text }]} numberOfLines={2}>
+          <Text style={[styles.heroTitle, isCompact && styles.heroTitleCompact, isExpanded && styles.heroTitleExpanded, { color: colors.text }]} numberOfLines={isCompact ? 3 : 2} ellipsizeMode="tail">
             {currentParking.address || 'Unknown location'}
           </Text>
 
           {noteOrSpotText && (
             <View style={[styles.noteBadge, { backgroundColor: colors.surfaceSecondary }]}> 
-              <Text style={[styles.bodyText, { color: colors.textSecondary }]}>{noteOrSpotText}</Text>
+              <Text style={[styles.bodyText, { color: colors.textSecondary }]} numberOfLines={2} ellipsizeMode="tail">{noteOrSpotText}</Text>
             </View>
           )}
 
           <View style={[styles.statusPanel, { backgroundColor: colors.surfaceSecondary }]}> 
             <View style={styles.statusRow}>
               <LocateFixed size={14} color={colors.textMuted} />
-              <Text style={[styles.captionText, { color: colors.textSecondary }]}>{locationStatusText}</Text>
+              <Text style={[styles.captionText, styles.locationStatusText, { color: colors.textSecondary }]} numberOfLines={2} ellipsizeMode="tail">{locationStatusText}</Text>
             </View>
             <View style={styles.statusMetrics}>
               <View style={styles.statusRow}>
@@ -80,8 +86,8 @@ export function ActiveParkingCard({ viewModel, onClearTimer }: ActiveParkingCard
             <View style={[styles.timerAlert, { backgroundColor: colors.warning + '15' }]}>
               <Timer size={16} color={colors.warning} />
               <Text style={[styles.bodyText, { color: colors.warning }]}>Timer: {formatDuration(timerRemaining)} remaining</Text>
-              <TouchableOpacity onPress={onClearTimer}>
-                <Text style={[styles.captionText, { color: colors.textMuted }]}>Cancel</Text>
+              <TouchableOpacity onPress={onClearTimer} style={styles.timerCancelButton}>
+                <Text style={[styles.captionText, { color: colors.textMuted }]} numberOfLines={1}>Cancel</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -96,7 +102,7 @@ export function ActiveParkingCard({ viewModel, onClearTimer }: ActiveParkingCard
           >
             <Car size={42} color={colors.textMuted} />
           </LinearGradient>
-          <Text style={[styles.heroTitle, { color: colors.text }]}>No car parked yet</Text>
+          <Text style={[styles.heroTitle, isCompact && styles.heroTitleCompact, isExpanded && styles.heroTitleExpanded, { color: colors.text }]}>No car parked yet</Text>
           <Text style={[styles.bodyText, styles.emptySubtitle, { color: colors.textSecondary }]}>
             {isAutoDetectionEnabled && savedBluetoothDevice
               ? `Auto-detection is active with ${savedBluetoothDevice.name}`
@@ -123,6 +129,8 @@ function formatDuration(ms: number): string {
 
 const styles = StyleSheet.create({
   heroCard: { gap: 16 },
+  heroCardCompact: { paddingHorizontal: 12, paddingVertical: 12, gap: 12 },
+  heroCardExpanded: { paddingHorizontal: 22, paddingVertical: 22, gap: 18 },
   carSection: { alignItems: 'center' },
   carIconBg: {
     width: 76,
@@ -134,7 +142,9 @@ const styles = StyleSheet.create({
   },
   statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
-  heroTitle: { fontSize: 30, fontWeight: '600', textAlign: 'center', lineHeight: 36 },
+  heroTitle: { fontSize: 30, fontWeight: '600', textAlign: 'center', lineHeight: 36, width: '100%', flexShrink: 1 },
+  heroTitleCompact: { fontSize: 24, lineHeight: 30 },
+  heroTitleExpanded: { fontSize: 34, lineHeight: 40 },
   noteBadge: { marginTop: 8, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 12, alignSelf: 'center' },
   bodyText: { fontSize: 15, fontWeight: '400' },
   captionText: { fontSize: 12, fontWeight: '500' },
@@ -162,6 +172,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  locationStatusText: {
+    flex: 1,
+    flexWrap: 'wrap',
+  },
+  timerCancelButton: {
+    minHeight: 44,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
   },
   emptyState: { alignItems: 'center', paddingVertical: 16 },
   emptyIconBg: {

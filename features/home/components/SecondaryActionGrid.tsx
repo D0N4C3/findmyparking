@@ -4,12 +4,15 @@ import { ChevronDown, ChevronUp, MapPin, Route, Share2, Timer } from 'lucide-rea
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+type HomeBreakpoint = 'compact' | 'standard' | 'expanded';
+
 interface SecondaryActionGridProps {
   viewModel: HomeViewModel;
   onShare: () => void;
   onOpenNote: () => void;
   onOpenMap: () => void;
   onOpenTimer: () => void;
+  breakpoint?: HomeBreakpoint;
 }
 
 /**
@@ -17,9 +20,11 @@ interface SecondaryActionGridProps {
  *
  * Usage: render when parking exists and pass action callbacks from parent state/controller.
  */
-export function SecondaryActionGrid({ viewModel, onShare, onOpenNote, onOpenMap, onOpenTimer }: SecondaryActionGridProps) {
+export function SecondaryActionGrid({ viewModel, onShare, onOpenNote, onOpenMap, onOpenTimer, breakpoint = 'standard' }: SecondaryActionGridProps) {
   const { colors } = viewModel;
   const [isExpanded, setIsExpanded] = useState(false);
+  const columnCount = breakpoint === 'compact' ? 1 : breakpoint === 'expanded' ? 4 : 2;
+  const itemWidth = `${100 / columnCount - (columnCount - 1) * 2}%` as const;
 
   return (
     <View style={styles.container}>
@@ -35,10 +40,10 @@ export function SecondaryActionGrid({ viewModel, onShare, onOpenNote, onOpenMap,
         <>
           <Text style={[styles.helperText, { color: colors.textMuted }]}>Tertiary actions for note sharing and parking timers.</Text>
           <View style={styles.toolsGrid}>
-            <AppSecondaryButton colors={colors} label="Share" icon={<Share2 size={18} color={colors.textPrimary ?? colors.text} />} onPress={onShare} style={styles.toolItem} />
-            <AppSecondaryButton colors={colors} label="Note" icon={<MapPin size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenNote} style={styles.toolItem} />
-            <AppSecondaryButton colors={colors} label="Route" icon={<Route size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenMap} style={styles.toolItem} />
-            <AppSecondaryButton colors={colors} label="Timer" icon={<Timer size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenTimer} style={styles.toolItem} />
+            <AppSecondaryButton colors={colors} label="Share" icon={<Share2 size={18} color={colors.textPrimary ?? colors.text} />} onPress={onShare} style={[styles.toolItem, { width: itemWidth }]} />
+            <AppSecondaryButton colors={colors} label="Note" icon={<MapPin size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenNote} style={[styles.toolItem, { width: itemWidth }]} />
+            <AppSecondaryButton colors={colors} label="Route" icon={<Route size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenMap} style={[styles.toolItem, { width: itemWidth }]} />
+            <AppSecondaryButton colors={colors} label="Timer" icon={<Timer size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenTimer} style={[styles.toolItem, { width: itemWidth }]} />
           </View>
         </>
       ) : null}
@@ -64,7 +69,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   toolItem: {
-    width: '48%',
     borderWidth: 1,
     minHeight: 56,
     paddingVertical: 10,

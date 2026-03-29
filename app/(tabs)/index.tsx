@@ -14,6 +14,7 @@ import {
   Platform,
   Modal,
   TextInput,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -178,6 +179,11 @@ export default function HomeScreen() {
   const colors = isDark ? Colors.dark : Colors.light;
   const router = useRouter();
   const { showError } = useDialog();
+  const { width } = useWindowDimensions();
+
+  const breakpoint = width < 360 ? 'compact' : width <= 480 ? 'standard' : 'expanded';
+  const isCompact = breakpoint === 'compact';
+  const isExpanded = breakpoint === 'expanded';
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -324,37 +330,39 @@ export default function HomeScreen() {
       <HomeHeader colors={colors} showAutoDetectionBadge={isAutoDetectionEnabled && !!savedBluetoothDevice} pulseAnim={pulseAnim} />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={[styles.scrollContent, { paddingBottom: 124 + insets.bottom }]} showsVerticalScrollIndicator={false}>
-        <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }] }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>I parked · help me return quickly</Text>
-          <ActiveParkingCard viewModel={viewModel} onClearTimer={clearParkingTimer} />
+        <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }] }]}> 
+          <Text style={[styles.sectionTitle, styles.sectionTitleResponsive, isCompact && styles.sectionTitleCompact, isExpanded && styles.sectionTitleExpanded, { color: colors.text }]}>I parked · help me return quickly</Text>
+          <ActiveParkingCard viewModel={viewModel} onClearTimer={clearParkingTimer} breakpoint={breakpoint} />
         </Animated.View>
 
         <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [32, 0] }) }] }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Primary Actions</Text>
+          <Text style={[styles.sectionTitle, styles.sectionTitleResponsive, isCompact && styles.sectionTitleCompact, isExpanded && styles.sectionTitleExpanded, { color: colors.text }]}>Primary Actions</Text>
           <PrimaryActionBar
             viewModel={viewModel}
             onSaveParking={handleSaveParking}
             onNavigateExternal={handleOpenExternalMaps}
             onUpdateLocation={handleUpdateLocation}
+            breakpoint={breakpoint}
           />
         </Animated.View>
 
         {currentParking && (
           <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>More tools</Text>
+            <Text style={[styles.sectionTitle, styles.sectionTitleResponsive, isCompact && styles.sectionTitleCompact, isExpanded && styles.sectionTitleExpanded, { color: colors.text }]}>More tools</Text>
             <SecondaryActionGrid
               viewModel={viewModel}
               onShare={handleShareLocation}
               onOpenNote={() => setNoteModalVisible(true)}
               onOpenMap={handleNavigateToCar}
               onOpenTimer={() => setTimerModalVisible(true)}
+              breakpoint={breakpoint}
             />
           </Animated.View>
         )}
 
         {currentParking && (
           <Animated.View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Insights / Stats</Text>
+            <Text style={[styles.sectionTitle, styles.sectionTitleResponsive, isCompact && styles.sectionTitleCompact, isExpanded && styles.sectionTitleExpanded, { color: colors.text }]}>Insights / Stats</Text>
             <StatsSummaryCard viewModel={viewModel} />
           </Animated.View>
         )}
@@ -384,6 +392,17 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
+  },
+  sectionTitleResponsive: {
+    lineHeight: 24,
+  },
+  sectionTitleCompact: {
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  sectionTitleExpanded: {
+    fontSize: 20,
+    lineHeight: 26,
   },
   modalOverlay: {
     flex: 1,
