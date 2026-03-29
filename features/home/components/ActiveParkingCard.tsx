@@ -22,6 +22,8 @@ export function ActiveParkingCard({ viewModel, onClearTimer, breakpoint = 'stand
   const {
     colors,
     currentParking,
+    hasParkingHistory,
+    lastKnownParkingLabel,
     isAutoDetectionEnabled,
     savedBluetoothDevice,
     isTimerActive,
@@ -104,9 +106,11 @@ export function ActiveParkingCard({ viewModel, onClearTimer, breakpoint = 'stand
           </LinearGradient>
           <Text style={[styles.heroTitle, isCompact && styles.heroTitleCompact, isExpanded && styles.heroTitleExpanded, { color: colors.text }]}>No car parked yet</Text>
           <Text style={[styles.bodyText, styles.emptySubtitle, { color: colors.textSecondary }]}>
-            {isAutoDetectionEnabled && savedBluetoothDevice
-              ? `Auto-detection is active with ${savedBluetoothDevice.name}`
-              : 'Enable auto-detection or manually save your parking spot'}
+            {hasParkingHistory
+              ? `Your last parking was at ${lastKnownParkingLabel ?? 'a saved location'}. Save your current spot to start a new parking session.`
+              : isAutoDetectionEnabled && savedBluetoothDevice
+                ? `Auto-detection is active with ${savedBluetoothDevice.name}. Save once to begin your first parking session.`
+                : 'Save your current spot to start tracking and get return guidance.'}
           </Text>
           {!isAutoDetectionEnabled && (
             <View style={[styles.alertBox, { backgroundColor: colors.warning + '15' }]}>

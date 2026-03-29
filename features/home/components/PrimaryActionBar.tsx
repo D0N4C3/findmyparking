@@ -1,6 +1,6 @@
 import { AppPrimaryButton, AppSecondaryButton } from '@/components/ui/primitives';
 import { HomeViewModel } from '@/features/home/home-view-model';
-import { ChevronRight, LocateFixed, Navigation, Plus } from 'lucide-react-native';
+import { ChevronRight, History, LocateFixed, Navigation, Plus } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 
 type HomeBreakpoint = 'compact' | 'standard' | 'expanded';
@@ -10,6 +10,7 @@ interface PrimaryActionBarProps {
   onSaveParking: () => void;
   onNavigateExternal: () => void;
   onUpdateLocation: () => void;
+  onOpenHistory: () => void;
   breakpoint?: HomeBreakpoint;
 }
 
@@ -19,8 +20,8 @@ interface PrimaryActionBarProps {
  * Usage: provide callbacks from the screen controller; this widget is display-only
  * and chooses button label/icon based on `HomeViewModel.currentParking`.
  */
-export function PrimaryActionBar({ viewModel, onSaveParking, onNavigateExternal, onUpdateLocation, breakpoint = 'standard' }: PrimaryActionBarProps) {
-  const { colors, currentParking, isLoading, shouldShowUpdateLocation } = viewModel;
+export function PrimaryActionBar({ viewModel, onSaveParking, onNavigateExternal, onUpdateLocation, onOpenHistory, breakpoint = 'standard' }: PrimaryActionBarProps) {
+  const { colors, currentParking, hasParkingHistory, isLoading, shouldShowUpdateLocation } = viewModel;
   const isCompact = breakpoint === 'compact';
   const isExpanded = breakpoint === 'expanded';
 
@@ -49,15 +50,26 @@ export function PrimaryActionBar({ viewModel, onSaveParking, onNavigateExternal,
   }
 
   return (
-    <AppPrimaryButton
-      colors={colors}
-      onPress={onSaveParking}
-      disabled={isLoading}
-      loading={isLoading}
-      style={[styles.primaryAction, isCompact && styles.primaryActionCompact, isExpanded && styles.primaryActionExpanded]}
-      icon={<Plus size={20} color={colors.textOnAccent} />}
-      label="Save Parking Spot"
-    />
+    <View style={styles.actionsWrap}>
+      <AppPrimaryButton
+        colors={colors}
+        onPress={onSaveParking}
+        disabled={isLoading}
+        loading={isLoading}
+        style={[styles.primaryAction, isCompact && styles.primaryActionCompact, isExpanded && styles.primaryActionExpanded]}
+        icon={<Plus size={20} color={colors.textOnAccent} />}
+        label="Park here now"
+      />
+      {hasParkingHistory ? (
+        <AppSecondaryButton
+          colors={colors}
+          label="Open History"
+          onPress={onOpenHistory}
+          icon={<History size={18} color={colors.textPrimary ?? colors.text} />}
+          style={[styles.secondaryAction, isCompact && styles.secondaryActionCompact, isExpanded && styles.secondaryActionExpanded]}
+        />
+      ) : null}
+    </View>
   );
 }
 
