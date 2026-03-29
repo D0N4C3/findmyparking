@@ -1,20 +1,51 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
-import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { ParkingProvider } from "@/context/ParkingContext";
-import { ThemeProvider } from "@/context/ThemeContext";
-import { DialogProvider } from "@/context/DialogContext";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Stack, useRouter, useSegments } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import React, { useEffect, useState } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { ParkingProvider } from '@/context/ParkingContext';
+import { ThemeProvider } from '@/context/ThemeContext';
+import { DialogProvider } from '@/context/DialogContext';
+import { getOnboardingState } from '@/services/onboarding';
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 void SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
+  const router = useRouter();
+  const segments = useSegments();
+  const [isOnboardingReady, setIsOnboardingReady] = useState(false);
+  const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
+
+  useEffect(() => {
+    const loadOnboardingState = async () => {
+      const state = await getOnboardingState();
+      setIsOnboardingComplete(state.completed);
+      setIsOnboardingReady(true);
+    };
+
+    void loadOnboardingState();
+  }, []);
+
+  useEffect(() => {
+    if (!isOnboardingReady) return;
+
+    const inOnboarding = segments[0] === 'onboarding';
+
+    if (!isOnboardingComplete && !inOnboarding) {
+      router.replace('/onboarding');
+      return;
+    }
+
+    if (isOnboardingComplete && inOnboarding) {
+      router.replace('/(tabs)');
+    }
+  }, [isOnboardingComplete, isOnboardingReady, router, segments]);
+
   return (
-    <Stack screenOptions={{ headerBackTitle: "Back" }}>
+    <Stack screenOptions={{ headerBackTitle: 'Back' }}>
+      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     </Stack>
   );

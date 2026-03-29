@@ -30,6 +30,7 @@ import { PrimaryActionBar } from '@/features/home/components/PrimaryActionBar';
 import { SecondaryActionGrid } from '@/features/home/components/SecondaryActionGrid';
 import { StatsSummaryCard } from '@/features/home/components/StatsSummaryCard';
 import { HomeViewModel } from '@/features/home/home-view-model';
+import { getOnboardingState } from '@/services/onboarding';
 
 function formatTimeAgo(timestamp: number): string {
   const now = Date.now();
@@ -191,6 +192,7 @@ export default function HomeScreen() {
   const slideAnim = useRef(new Animated.Value(0)).current;
   const [timerModalVisible, setTimerModalVisible] = useState(false);
   const [noteModalVisible, setNoteModalVisible] = useState(false);
+  const [showBluetoothSetupPrompt, setShowBluetoothSetupPrompt] = useState(false);
 
   useEffect(() => {
     Animated.timing(slideAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
@@ -207,6 +209,15 @@ export default function HomeScreen() {
     }
     return () => pulseAnim.setValue(1);
   }, [isAutoDetectionEnabled, savedBluetoothDevice, pulseAnim]);
+
+  useEffect(() => {
+    const loadOnboardingState = async () => {
+      const onboardingState = await getOnboardingState();
+      setShowBluetoothSetupPrompt(onboardingState.skippedBluetoothSetup && !savedBluetoothDevice);
+    };
+
+    void loadOnboardingState();
+  }, [savedBluetoothDevice]);
 
   const handleSaveParking = useCallback(async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -341,6 +352,14 @@ export default function HomeScreen() {
       <ScrollView style={styles.scrollView} contentContainerStyle={[styles.scrollContent, { paddingBottom: 124 + insets.bottom }]} showsVerticalScrollIndicator={false}>
         <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }] }]}> 
           <Text style={[styles.sectionTitle, styles.sectionTitleResponsive, isCompact && styles.sectionTitleCompact, isExpanded && styles.sectionTitleExpanded, { color: colors.text }]}>I parked · help me return quickly</Text>
+          {showBluetoothSetupPrompt ? (
+            <TouchableOpacity style={[styles.setupPrompt, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push('/settings')}>
+              <Text style={[styles.setupPromptTitle, { color: colors.text }]}>Finish car Bluetooth setup</Text>
+              <Text style={[styles.setupPromptSubtitle, { color: colors.textMuted }]}>
+                You skipped this in onboarding. Set it up in Settings to enable automatic parking detection.
+              </Text>
+            </TouchableOpacity>
+          ) : null}
           <ActiveParkingCard viewModel={viewModel} onClearTimer={clearParkingTimer} breakpoint={breakpoint} />
         </Animated.View>
 
@@ -398,6 +417,21 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: 12,
+  },
+  setupPrompt: {
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+  },
+  setupPromptTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  setupPromptSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   sectionTitle: {
     fontSize: 18,
