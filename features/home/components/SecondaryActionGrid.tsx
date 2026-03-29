@@ -1,6 +1,6 @@
 import { AppSecondaryButton } from '@/components/ui/primitives';
 import { HomeViewModel } from '@/features/home/home-view-model';
-import { ChevronDown, ChevronUp, MapPin, Route, Share2, Timer } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, MapPin, Route, Share2, Timer, XCircle } from 'lucide-react-native';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -12,6 +12,7 @@ interface SecondaryActionGridProps {
   onOpenNote: () => void;
   onOpenMap: () => void;
   onOpenTimer: () => void;
+  onEndSession: () => void;
   breakpoint?: HomeBreakpoint;
 }
 
@@ -20,7 +21,7 @@ interface SecondaryActionGridProps {
  *
  * Usage: render when parking exists and pass action callbacks from parent state/controller.
  */
-export function SecondaryActionGrid({ viewModel, onShare, onOpenNote, onOpenMap, onOpenTimer, breakpoint = 'standard' }: SecondaryActionGridProps) {
+export function SecondaryActionGrid({ viewModel, onShare, onOpenNote, onOpenMap, onOpenTimer, onEndSession, breakpoint = 'standard' }: SecondaryActionGridProps) {
   const { colors } = viewModel;
   const [isExpanded, setIsExpanded] = useState(false);
   const columnCount = breakpoint === 'compact' ? 1 : breakpoint === 'expanded' ? 4 : 2;
@@ -43,6 +44,7 @@ export function SecondaryActionGrid({ viewModel, onShare, onOpenNote, onOpenMap,
             <AppSecondaryButton colors={colors} label="Note" icon={<MapPin size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenNote} style={[styles.toolItem, { width: itemWidth }]} />
             <AppSecondaryButton colors={colors} label="Route" icon={<Route size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenMap} style={[styles.toolItem, { width: itemWidth }]} />
             <AppSecondaryButton colors={colors} label="Timer" icon={<Timer size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenTimer} style={[styles.toolItem, { width: itemWidth }]} />
+            <AppSecondaryButton colors={colors} label="End Session" icon={<XCircle size={18} color={colors.textPrimary ?? colors.text} />} onPress={onEndSession} style={[styles.toolItem, { width: itemWidth }]} />
           </View>
         </>
       ) : null}

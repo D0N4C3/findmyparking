@@ -58,6 +58,7 @@ interface ParkingContextType {
   updateParkingSpot: (id: string, updates: Partial<ParkingSpot>) => void;
   setParkingTimer: (minutes: number) => void;
   clearParkingTimer: () => void;
+  endParkingSession: () => Promise<void>;
   getDistanceToCar: () => number | null;
   getDirectionToCar: () => number | null;
   getWalkingTimeToCar: () => number | null;
@@ -383,6 +384,25 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     setIsTimerActive(false);
   }, [currentParking, updateParkingSpot]);
 
+  const endParkingSession = useCallback(async () => {
+    if (!currentParking) return;
+
+    try {
+      const updatedHistory = [currentParking, ...parkingHistory].slice(0, 50);
+      setParkingHistory(updatedHistory);
+      await Promise.all([
+        AsyncStorage.setItem(STORAGE_KEYS.parkingHistory, JSON.stringify(updatedHistory)),
+        AsyncStorage.removeItem(STORAGE_KEYS.currentParking),
+      ]);
+      setCurrentParking(null);
+      setTimerRemaining(null);
+      setIsTimerActive(false);
+    } catch (error) {
+      console.error('Error ending parking session:', error);
+      showError(DIALOG_COPY.errors.generic.title, DIALOG_COPY.errors.generic.message);
+    }
+  }, [currentParking, parkingHistory, showError]);
+
   const deleteParkingSpot = useCallback(async (id: string) => {
     try {
       const updatedHistory = parkingHistory.filter(spot => spot.id !== id);
@@ -505,6 +525,7 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     updateParkingSpot,
     setParkingTimer,
     clearParkingTimer,
+    endParkingSession,
     getDistanceToCar,
     getDirectionToCar,
     getWalkingTimeToCar,
@@ -530,6 +551,7 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     updateParkingSpot,
     setParkingTimer,
     clearParkingTimer,
+    endParkingSession,
     getDistanceToCar,
     getDirectionToCar,
     getWalkingTimeToCar,
