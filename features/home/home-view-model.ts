@@ -4,6 +4,8 @@ import { CarBluetoothDevice, ParkingSpot, ParkingStats } from '@/context/Parking
 export interface HomeViewModel {
   colors: ColorTheme;
   currentParking: ParkingSpot | null;
+  hasParkingHistory: boolean;
+  lastKnownParkingLabel: string | null;
   isLoading: boolean;
   isAutoDetectionEnabled: boolean;
   savedBluetoothDevice: CarBluetoothDevice | null;

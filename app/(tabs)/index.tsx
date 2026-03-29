@@ -161,6 +161,7 @@ function NoteModal({ visible, onClose, onSave, initialNote, colors }: NoteModalP
 export default function HomeScreen() {
   const {
     currentParking,
+    parkingHistory,
     isLoading,
     saveParkingLocation,
     getDistanceToCar,
@@ -218,6 +219,11 @@ export default function HomeScreen() {
   const handleNavigateToCar = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push('/map');
+  }, [router]);
+
+  const handleOpenHistory = useCallback(() => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/history');
   }, [router]);
 
   const handleOpenExternalMaps = useCallback(() => {
@@ -310,6 +316,8 @@ export default function HomeScreen() {
   const viewModel: HomeViewModel = {
     colors,
     currentParking,
+    hasParkingHistory: parkingHistory.length > 0,
+    lastKnownParkingLabel: parkingHistory[0]?.address ?? null,
     isLoading,
     isAutoDetectionEnabled,
     savedBluetoothDevice,
@@ -336,19 +344,20 @@ export default function HomeScreen() {
         </Animated.View>
 
         <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [32, 0] }) }] }]}>
-          <Text style={[styles.sectionTitle, styles.sectionTitleResponsive, isCompact && styles.sectionTitleCompact, isExpanded && styles.sectionTitleExpanded, { color: colors.text }]}>Primary Actions</Text>
+          <Text style={[styles.sectionTitle, styles.sectionTitleResponsive, isCompact && styles.sectionTitleCompact, isExpanded && styles.sectionTitleExpanded, { color: colors.text }]}>Quick actions</Text>
           <PrimaryActionBar
             viewModel={viewModel}
             onSaveParking={handleSaveParking}
             onNavigateExternal={handleOpenExternalMaps}
             onUpdateLocation={handleUpdateLocation}
+            onOpenHistory={handleOpenHistory}
             breakpoint={breakpoint}
           />
         </Animated.View>
 
         {currentParking && (
           <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }]}>
-            <Text style={[styles.sectionTitle, styles.sectionTitleResponsive, isCompact && styles.sectionTitleCompact, isExpanded && styles.sectionTitleExpanded, { color: colors.text }]}>More tools</Text>
+            <Text style={[styles.sectionTitle, styles.sectionTitleResponsive, isCompact && styles.sectionTitleCompact, isExpanded && styles.sectionTitleExpanded, { color: colors.text }]}>Extras</Text>
             <SecondaryActionGrid
               viewModel={viewModel}
               onShare={handleShareLocation}
