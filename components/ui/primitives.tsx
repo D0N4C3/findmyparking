@@ -19,6 +19,7 @@ export function AppCard({ colors, children, style, elevated = 'sm' }: AppCardPro
         styles.card,
         {
           backgroundColor: colors.card,
+          borderColor: colors.borderLight ?? colors.border,
           shadowColor: colors.shadow,
           ...elevation[elevated],
         },
