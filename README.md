@@ -1,38 +1,41 @@
 # find-my-park
 
-## Android Google Maps key setup (Expo)
+## Google Maps setup (Expo + react-native-maps)
 
-Use one canonical environment variable name everywhere:
+This project uses `react-native-maps` with the Google provider for iOS and Android.
+
+Use these canonical environment variables:
 
 - `EXPO_PUBLIC_GOOGLE_ANDROID_GEO_API_KEY`
+- `EXPO_PUBLIC_GOOGLE_IOS_GEO_API_KEY`
 
-### 1) Set the env var
+### 1) Add keys
 
-In your shell (or `.env` that Expo loads), set:
+In your shell or `.env`:
 
 ```bash
-export EXPO_PUBLIC_GOOGLE_ANDROID_GEO_API_KEY=your_google_maps_android_key
+export EXPO_PUBLIC_GOOGLE_ANDROID_GEO_API_KEY=your_android_google_maps_key
+export EXPO_PUBLIC_GOOGLE_IOS_GEO_API_KEY=your_ios_google_maps_key
 ```
 
-If you use EAS build profiles, also set `EXPO_PUBLIC_GOOGLE_ANDROID_GEO_API_KEY` in your build environment/secrets.
+If you use EAS, add both to your build profile environment/secrets.
 
-### 2) Rebuild your native client
+### 2) Rebuild native app
 
-Android map keys are compiled into native config, so you must rebuild after changing the key:
+Map keys are injected at native build time.
 
 ```bash
 npx expo run:android
+npx expo run:ios
 ```
 
-Or rebuild with EAS if you use cloud builds.
+> Expo Go cannot load custom native Google map keys. Use a dev client or a standalone build.
 
-> Note: Expo Go cannot load your custom native Android Google Maps key. Use a custom dev client or a standalone build.
+### 3) Verify Navigation screen flow
 
-### 3) Verify in-app
-
-1. Launch the rebuilt app.
-2. Open the **Navigate** tab.
-3. Confirm the map warning card does **not** show a missing key warning.
-4. If it appears, check the inline status in that card for:
-   - Runtime (`Expo Go` vs `Custom dev client / standalone`)
-   - Key detection (`EXPO_PUBLIC_GOOGLE_ANDROID_GEO_API_KEY: Yes/No`)
+1. Open **Navigate** tab.
+2. Confirm the map renders.
+3. Use **Build Route** to generate an in-app route to your parked car.
+4. Check setup card status if map does not render:
+   - Android key detection (`EXPO_PUBLIC_GOOGLE_ANDROID_GEO_API_KEY`)
+   - iOS key detection (`EXPO_PUBLIC_GOOGLE_IOS_GEO_API_KEY`)
