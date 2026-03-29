@@ -413,8 +413,15 @@ export default function MapScreen() {
 
   const startInAppNavigation = useCallback(async () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (!currentParking || !currentLocation) {
+    if (!currentParking) {
       showError(DIALOG_COPY.prompts.noParkingSaved.title, DIALOG_COPY.prompts.noParkingSaved.message);
+      return;
+    }
+    if (!currentLocation) {
+      showError(
+        DIALOG_COPY.prompts.locationUnavailableForNavigation.title,
+        DIALOG_COPY.prompts.locationUnavailableForNavigation.message
+      );
       return;
     }
     const destination = {
@@ -899,7 +906,20 @@ export default function MapScreen() {
             </View>
 
             {/* Navigate Button */}
-            <AppButton colors={colors} variant="primary" onPress={startInAppNavigation} label="Start Navigation" icon={<Navigation2 size={22} color={colors.textOnAccent} />} style={styles.navigateButton} />
+            <AppButton
+              colors={colors}
+              variant="primary"
+              onPress={startInAppNavigation}
+              disabled={!currentLocation}
+              label="Start Navigation"
+              icon={<Navigation2 size={22} color={currentLocation ? colors.textOnAccent : colors.textMuted} />}
+              style={styles.navigateButton}
+            />
+            {!currentLocation && (
+              <Text style={[styles.navigationHelperText, { color: colors.textSecondary }]}>
+                Enable location to start navigation.
+              </Text>
+            )}
           </>
         ) : (
           <View style={styles.emptyState}>
@@ -1278,6 +1298,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  navigationHelperText: {
+    marginTop: 10,
+    fontSize: 13,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   emptyState: {
     alignItems: 'center',
