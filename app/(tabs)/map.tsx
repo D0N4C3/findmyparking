@@ -129,7 +129,8 @@ export default function MapScreen() {
     getDirectionToCar,
     getWalkingTimeToCar
   } = useParking();
-  const { isDark } = useTheme();
+  const theme = useTheme();
+  const isDark = theme?.isDark ?? false;
   const colors = isDark ? Colors.dark : Colors.light;
   const { showError } = useDialog();
   

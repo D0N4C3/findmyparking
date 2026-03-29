@@ -242,7 +242,8 @@ function FilterModal({ visible, onClose, selectedFilter, onSelectFilter, colors 
 
 export default function HistoryScreen() {
   const { parkingHistory, currentParking, deleteParkingSpot, clearHistory, updateParkingSpot } = useParking();
-  const { isDark } = useTheme();
+  const theme = useTheme();
+  const isDark = theme?.isDark ?? false;
   const colors = isDark ? Colors.dark : Colors.light;
   const router = useRouter();
   
