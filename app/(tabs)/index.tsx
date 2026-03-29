@@ -19,6 +19,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
+import * as Location from 'expo-location';
 import { AppButton } from '@/components/ui/primitives';
 import { useDialog } from '@/context/DialogContext';
 import { DIALOG_COPY } from '@/constants/dialogs';
@@ -242,20 +243,63 @@ export default function HomeScreen() {
     }
   }, [currentParking, showError]);
 
+  const handleUpdateLocation = useCallback(async () => {
+    if (!currentParking) return;
+
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        showError(DIALOG_COPY.permissions.savePermissionRequired.title, DIALOG_COPY.permissions.savePermissionRequired.message);
+        return;
+      }
+
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      let address = currentParking.address;
+
+      try {
+        const [geocode] = await Location.reverseGeocodeAsync({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+        if (geocode) {
+          address = [geocode.name, geocode.street, geocode.city].filter(Boolean).join(', ');
+        }
+      } catch {
+        // keep existing address when reverse geocode fails
+      }
+
+      await updateParkingSpot(currentParking.id, {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        address,
+      });
+    } catch {
+      showError(DIALOG_COPY.errors.saveParking.title, DIALOG_COPY.errors.saveParking.message);
+    }
+  }, [currentParking, showError, updateParkingSpot]);
+
   const handleSetTimer = useCallback((minutes: number) => {
     setParkingTimer(minutes);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [setParkingTimer]);
 
-  const handleSaveNote = useCallback((note: string) => {
+  const handleSaveNote = useCallback(async (note: string) => {
     if (currentParking) {
-      updateParkingSpot(currentParking.id, { notes: note });
+      await updateParkingSpot(currentParking.id, { notes: note });
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   }, [currentParking, updateParkingSpot]);
 
   const distance = getDistanceToCar();
   const walkingTime = getWalkingTimeToCar();
+  const parkingAgeMs = currentParking ? Date.now() - currentParking.timestamp : 0;
+  const shouldShowUpdateLocation = !!currentParking && (distance === null || parkingAgeMs > 2 * 60 * 60 * 1000);
+  const locationStatusText = currentParking
+    ? distance === null
+      ? 'Live location is unavailable. Refresh to improve return guidance.'
+      : 'Live location connected for return guidance.'
+    : 'No active parking location yet.';
 
   const viewModel: HomeViewModel = {
     colors,
@@ -270,6 +314,8 @@ export default function HomeScreen() {
     parkedAtText: currentParking ? new Date(currentParking.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--',
     parkedAgoText: currentParking ? formatTimeAgo(currentParking.timestamp) : '',
     noteOrSpotText: currentParking ? currentParking.spotNumber || currentParking.notes || null : null,
+    locationStatusText,
+    shouldShowUpdateLocation,
     parkingStats,
   };
 
@@ -279,18 +325,23 @@ export default function HomeScreen() {
 
       <ScrollView style={styles.scrollView} contentContainerStyle={[styles.scrollContent, { paddingBottom: 124 + insets.bottom }]} showsVerticalScrollIndicator={false}>
         <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }] }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Active Parking Summary</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>I parked · help me return quickly</Text>
           <ActiveParkingCard viewModel={viewModel} onClearTimer={clearParkingTimer} />
         </Animated.View>
 
         <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [32, 0] }) }] }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Primary Actions</Text>
-          <PrimaryActionBar viewModel={viewModel} onSaveParking={handleSaveParking} onNavigateExternal={handleOpenExternalMaps} />
+          <PrimaryActionBar
+            viewModel={viewModel}
+            onSaveParking={handleSaveParking}
+            onNavigateExternal={handleOpenExternalMaps}
+            onUpdateLocation={handleUpdateLocation}
+          />
         </Animated.View>
 
         {currentParking && (
           <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Secondary Tools</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>More tools</Text>
             <SecondaryActionGrid
               viewModel={viewModel}
               onShare={handleShareLocation}

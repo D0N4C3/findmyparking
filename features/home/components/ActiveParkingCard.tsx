@@ -1,6 +1,6 @@
 import { AppCard } from '@/components/ui/primitives';
 import { HomeViewModel } from '@/features/home/home-view-model';
-import { AlertCircle, Car, Timer } from 'lucide-react-native';
+import { AlertCircle, Car, Clock3, LocateFixed, Timer } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -16,7 +16,19 @@ interface ActiveParkingCardProps {
  * timer-clear intent through `onClearTimer`.
  */
 export function ActiveParkingCard({ viewModel, onClearTimer }: ActiveParkingCardProps) {
-  const { colors, currentParking, isAutoDetectionEnabled, savedBluetoothDevice, isTimerActive, timerRemaining, parkedAgoText, noteOrSpotText } = viewModel;
+  const {
+    colors,
+    currentParking,
+    isAutoDetectionEnabled,
+    savedBluetoothDevice,
+    isTimerActive,
+    timerRemaining,
+    parkedAgoText,
+    noteOrSpotText,
+    locationStatusText,
+    distanceText,
+    walkingTimeText,
+  } = viewModel;
 
   return (
     <AppCard colors={colors} elevated="lg" style={styles.heroCard}>
@@ -42,10 +54,27 @@ export function ActiveParkingCard({ viewModel, onClearTimer }: ActiveParkingCard
           </Text>
 
           {noteOrSpotText && (
-            <View style={[styles.noteBadge, { backgroundColor: colors.surfaceSecondary }]}>
+            <View style={[styles.noteBadge, { backgroundColor: colors.surfaceSecondary }]}> 
               <Text style={[styles.bodyText, { color: colors.textSecondary }]}>{noteOrSpotText}</Text>
             </View>
           )}
+
+          <View style={[styles.statusPanel, { backgroundColor: colors.surfaceSecondary }]}> 
+            <View style={styles.statusRow}>
+              <LocateFixed size={14} color={colors.textMuted} />
+              <Text style={[styles.captionText, { color: colors.textSecondary }]}>{locationStatusText}</Text>
+            </View>
+            <View style={styles.statusMetrics}>
+              <View style={styles.statusRow}>
+                <LocateFixed size={14} color={colors.accent} />
+                <Text style={[styles.bodyText, { color: colors.text }]}>Distance: {distanceText}</Text>
+              </View>
+              <View style={styles.statusRow}>
+                <Clock3 size={14} color={colors.accent} />
+                <Text style={[styles.bodyText, { color: colors.text }]}>Walk: {walkingTimeText}</Text>
+              </View>
+            </View>
+          </View>
 
           {isTimerActive && timerRemaining !== null && (
             <View style={[styles.timerAlert, { backgroundColor: colors.warning + '15' }]}>
@@ -117,6 +146,22 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 14,
+  },
+  statusPanel: {
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  statusMetrics: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   emptyState: { alignItems: 'center', paddingVertical: 16 },
   emptyIconBg: {
