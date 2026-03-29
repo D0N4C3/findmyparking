@@ -10,6 +10,7 @@ import {
   StartupPermissionAskedState,
   getPermissionStatuses,
 } from '@/services/permissions';
+import { getOnboardingState } from '@/services/onboarding';
 import { useDialog } from '@/context/DialogContext';
 import { DIALOG_COPY } from '@/constants/dialogs';
 
@@ -156,6 +157,8 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
 
   const loadSavedData = async () => {
     try {
+      const onboardingState = await getOnboardingState();
+
       const [parkingData, historyData, deviceData, autoDetectionData, permissionAskedData] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.currentParking),
         AsyncStorage.getItem(STORAGE_KEYS.parkingHistory),
@@ -164,8 +167,17 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
         AsyncStorage.getItem(STORAGE_KEYS.permissionAsked),
       ]);
 
-      if (parkingData) setCurrentParking(JSON.parse(parkingData));
-      if (historyData) setParkingHistory(JSON.parse(historyData));
+      if (onboardingState.completed) {
+        if (parkingData) {
+          setCurrentParking(JSON.parse(parkingData));
+          console.log('[ParkingContext] hydrated current parking from storage');
+        }
+        if (historyData) setParkingHistory(JSON.parse(historyData));
+      } else if (parkingData || historyData) {
+        await AsyncStorage.multiRemove([STORAGE_KEYS.currentParking, STORAGE_KEYS.parkingHistory]);
+        console.log('[ParkingContext] skipped parking hydration because onboarding is incomplete');
+      }
+
       if (deviceData) setSavedBluetoothDeviceState(JSON.parse(deviceData));
       if (autoDetectionData) setAutoDetectionEnabledState(JSON.parse(autoDetectionData));
       if (permissionAskedData) {
