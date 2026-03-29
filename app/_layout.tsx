@@ -31,21 +31,32 @@ function RootLayoutNav() {
   useEffect(() => {
     if (!isOnboardingReady) return;
 
-    const inOnboarding = segments[0] === 'onboarding';
+    const syncOnboardingRoute = async () => {
+      const latestState = await getOnboardingState();
+      const completed = latestState.completed;
 
-    if (!isOnboardingComplete && !inOnboarding) {
-      router.replace('/onboarding');
-      return;
-    }
+      if (completed !== isOnboardingComplete) {
+        setIsOnboardingComplete(completed);
+      }
 
-    if (isOnboardingComplete && inOnboarding) {
-      router.replace('/(tabs)');
-    }
+      const inOnboarding = segments[0] === 'onboarding';
+
+      if (!completed && !inOnboarding) {
+        router.replace('/onboarding');
+        return;
+      }
+
+      if (completed && inOnboarding) {
+        router.replace('/(tabs)');
+      }
+    };
+
+    void syncOnboardingRoute();
   }, [isOnboardingComplete, isOnboardingReady, router, segments]);
 
   return (
     <Stack screenOptions={{ headerBackTitle: 'Back' }}>
-      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen name="onboarding/index" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     </Stack>
   );

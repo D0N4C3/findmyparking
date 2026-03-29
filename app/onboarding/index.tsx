@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import { Bluetooth, Check, MapPin, Bell, ChevronRight } from 'lucide-react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors } from '@/constants/colors';
 import { useTheme } from '@/context/ThemeContext';
@@ -26,6 +26,7 @@ export default function OnboardingScreen() {
     setAutoDetectionEnabled,
   } = useParking();
 
+  const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
   const [pickerVisible, setPickerVisible] = useState(false);
 
@@ -67,7 +68,7 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         {step === 0 ? (
           <View style={styles.stepContainer}>
             <Text style={[styles.title, { color: colors.text }]}>Welcome to CarPing 👋</Text>
@@ -111,7 +112,7 @@ export default function OnboardingScreen() {
         ) : null}
       </ScrollView>
 
-      <View style={styles.actions}>
+      <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom + 12, 24) }] }>
         {step < 2 ? (
           <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: colors.accent }]}
@@ -192,7 +193,7 @@ const styles = StyleSheet.create({
   permissionLabel: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   permissionText: { fontSize: 15, fontWeight: '600' },
   requestText: { fontSize: 14, fontWeight: '700' },
-  actions: { paddingHorizontal: 20, paddingBottom: 24, gap: 10 },
+  actions: { paddingHorizontal: 20, gap: 10 },
   primaryButton: { borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   primaryButtonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   skipButton: { alignItems: 'center', paddingVertical: 6 },
