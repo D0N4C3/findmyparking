@@ -39,6 +39,21 @@ import { AppButton, AppCard, SectionHeader, StatTile } from '@/components/ui/pri
 import { useDialog } from '@/context/DialogContext';
 import { DIALOG_COPY } from '@/constants/dialogs';
 
+const SPACING = {
+  xs: 8,
+  sm: 12,
+  md: 16,
+  lg: 24,
+  xl: 32,
+} as const;
+
+const TYPE_SCALE = {
+  title: 30,
+  sectionTitle: 18,
+  body: 15,
+  caption: 12,
+} as const;
+
 function formatTimeAgo(timestamp: number): string {
   const now = Date.now();
   const diff = now - timestamp;
@@ -341,79 +356,53 @@ export default function HomeScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 124 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Main Status Card */}
-        <Animated.View style={[styles.mainCard, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }] }]}>
-          <AppCard colors={colors} elevated="lg">
-          {currentParking ? (
-            <>
-              {/* Car Icon & Status */}
-              <View style={styles.carSection}>
-                <LinearGradient
-                  colors={colors.accentGradient.map(c => c + '30') as [string, string]}
-                  style={styles.carIconBg}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <Car size={40} color={colors.accent} />
-                </LinearGradient>
-                <View style={styles.statusBadge}>
-                  <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
-                  <Text style={[styles.statusText, { color: colors.textSecondary }]}>
-                    Parked {formatTimeAgo(currentParking.timestamp)}
-                  </Text>
+        <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }] }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Active Parking Summary</Text>
+          <AppCard colors={colors} elevated="lg" style={styles.heroCard}>
+            {currentParking ? (
+              <>
+                <View style={styles.carSection}>
+                  <LinearGradient
+                    colors={colors.accentGradient.map(c => c + '30') as [string, string]}
+                    style={styles.carIconBg}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Car size={34} color={colors.accent} />
+                  </LinearGradient>
+                  <View style={styles.statusBadge}>
+                    <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
+                    <Text style={[styles.captionText, { color: colors.textSecondary }]}>
+                      Parked {formatTimeAgo(currentParking.timestamp)}
+                    </Text>
+                  </View>
                 </View>
-              </View>
 
-              {/* Location */}
-              <View style={styles.locationSection}>
-                <Text style={[styles.locationText, { color: colors.text }]} numberOfLines={2}>
+                <Text style={[styles.heroTitle, { color: colors.text }]} numberOfLines={2}>
                   {currentParking.address || 'Unknown location'}
                 </Text>
+
                 {(currentParking.notes || currentParking.spotNumber) && (
                   <View style={[styles.noteBadge, { backgroundColor: colors.surfaceSecondary }]}>
-                    <Text style={[styles.noteText, { color: colors.textSecondary }]}>
+                    <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
                       {currentParking.spotNumber || currentParking.notes}
                     </Text>
                   </View>
                 )}
-              </View>
 
-              {/* Stats Grid */}
-              <View style={styles.statsGrid}>
-                <StatTile colors={colors} icon={<Navigation size={18} color={colors.accent} />} value={formatDistance(distance)} label="away" />
-                <StatTile colors={colors} icon={<Clock size={18} color={colors.accent} />} value={walkingTime !== null ? `${walkingTime}m` : '--'} label="walk time" />
-                <StatTile colors={colors} icon={<Zap size={18} color={colors.accent} />} value={new Date(currentParking.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} label="parked at" />
-              </View>
-
-              {/* Timer Alert */}
-              {isTimerActive && timerRemaining !== null && (
-                <View style={[styles.timerAlert, { backgroundColor: colors.warning + '15' }]}>
-                  <Timer size={18} color={colors.warning} />
-                  <Text style={[styles.timerText, { color: colors.warning }]}>
-                    Timer: {formatDuration(timerRemaining)} remaining
-                  </Text>
-                  <TouchableOpacity onPress={clearParkingTimer}>
-                    <Text style={[styles.timerCancel, { color: colors.textMuted }]}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* Primary Action */}
-              <AppButton colors={colors} label="Navigate to Car" onPress={handleOpenExternalMaps} variant="primary" icon={<Navigation size={20} color={colors.textOnAccent} />} trailingIcon={<ChevronRight size={20} color={colors.textOnAccent} />} style={styles.navigateButton} />
-
-              {/* Quick Actions Row */}
-              <View style={styles.quickActions}>
-                <AppButton colors={colors} label="Timer" variant="secondary" onPress={() => setTimerModalVisible(true)} icon={<Timer size={18} color={colors.text} />} style={styles.quickAction} />
-                
-                <AppButton colors={colors} label="Note" variant="secondary" onPress={() => setNoteModalVisible(true)} icon={<MapPin size={18} color={colors.text} />} style={styles.quickAction} />
-                
-                <AppButton colors={colors} label="Share" variant="secondary" onPress={handleShareLocation} icon={<Share2 size={18} color={colors.text} />} style={styles.quickAction} />
-                
-                <AppButton colors={colors} label="Map" variant="secondary" onPress={handleNavigateToCar} icon={<MoreHorizontal size={18} color={colors.text} />} style={styles.quickAction} />
-              </View>
-            </>
-          ) : (
-            <>
+                {isTimerActive && timerRemaining !== null && (
+                  <View style={[styles.timerAlert, { backgroundColor: colors.warning + '15' }]}>
+                    <Timer size={16} color={colors.warning} />
+                    <Text style={[styles.bodyText, { color: colors.warning }]}>
+                      Timer: {formatDuration(timerRemaining)} remaining
+                    </Text>
+                    <TouchableOpacity onPress={clearParkingTimer}>
+                      <Text style={[styles.captionText, { color: colors.textMuted }]}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </>
+            ) : (
               <View style={styles.emptyState}>
                 <LinearGradient
                   colors={[colors.surfaceSecondary, colors.surfaceTertiary]}
@@ -421,84 +410,99 @@ export default function HomeScreen() {
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                 >
-                  <Car size={48} color={colors.textMuted} />
+                  <Car size={42} color={colors.textMuted} />
                 </LinearGradient>
-                
-                <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                  No car parked yet
-                </Text>
-                
-                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                  {isAutoDetectionEnabled && savedBluetoothDevice 
+                <Text style={[styles.heroTitle, { color: colors.text }]}>No car parked yet</Text>
+                <Text style={[styles.bodyText, styles.emptySubtitle, { color: colors.textSecondary }]}>
+                  {isAutoDetectionEnabled && savedBluetoothDevice
                     ? `Auto-detection is active with ${savedBluetoothDevice.name}`
                     : 'Enable auto-detection or manually save your parking spot'}
                 </Text>
-
                 {!isAutoDetectionEnabled && (
                   <View style={[styles.alertBox, { backgroundColor: colors.warning + '15' }]}>
-                    <AlertCircle size={20} color={colors.warning} />
-                    <Text style={[styles.alertText, { color: colors.warning }]}>
-                      Auto-detection is disabled
-                    </Text>
+                    <AlertCircle size={18} color={colors.warning} />
+                    <Text style={[styles.bodyText, { color: colors.warning }]}>Auto-detection is disabled</Text>
                   </View>
                 )}
               </View>
-            </>
-          )}
+            )}
           </AppCard>
         </Animated.View>
 
-        {/* Stats Summary */}
-        {parkingStats.totalParkings > 0 && (
-          <Animated.View style={[styles.statsCard, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }] }]}>
-            <AppCard colors={colors} elevated="md">
-            <View style={styles.statsHeader}>
-              <TrendingUp size={20} color={colors.accent} />
-              <Text style={[styles.statsTitle, { color: colors.text }]}>Your Stats</Text>
+        <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [32, 0] }) }] }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Primary Actions</Text>
+          {currentParking ? (
+            <AppButton
+              colors={colors}
+              label="Navigate to Car"
+              onPress={handleOpenExternalMaps}
+              variant="primary"
+              icon={<Navigation size={20} color={colors.textOnAccent} />}
+              trailingIcon={<ChevronRight size={20} color={colors.textOnAccent} />}
+              style={styles.primaryAction}
+            />
+          ) : (
+            <AppButton
+              colors={colors}
+              onPress={handleSaveParking}
+              disabled={isLoading}
+              variant="primary"
+              style={styles.primaryAction}
+              icon={isLoading ? <ActivityIndicator color={colors.textOnAccent} /> : <Plus size={20} color={colors.textOnAccent} />}
+              label={isLoading ? 'Saving...' : 'Save Parking Spot'}
+            />
+          )}
+        </Animated.View>
+
+        {currentParking && (
+          <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Secondary Tools</Text>
+            <View style={styles.toolsGrid}>
+              <TouchableOpacity style={[styles.toolItem, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={handleShareLocation}>
+                <Share2 size={16} color={colors.text} />
+                <Text style={[styles.captionText, { color: colors.textSecondary }]}>Share</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.toolItem, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => setNoteModalVisible(true)}>
+                <MapPin size={16} color={colors.text} />
+                <Text style={[styles.captionText, { color: colors.textSecondary }]}>Note</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.toolItem, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={handleNavigateToCar}>
+                <MoreHorizontal size={16} color={colors.text} />
+                <Text style={[styles.captionText, { color: colors.textSecondary }]}>Map</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.toolItem, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => setTimerModalVisible(true)}>
+                <Timer size={16} color={colors.text} />
+                <Text style={[styles.captionText, { color: colors.textSecondary }]}>Timer</Text>
+              </TouchableOpacity>
             </View>
-            
-            <View style={styles.statsRow}>
-              <View style={styles.statBox}>
-                <Text style={[styles.statBoxValue, { color: colors.text }]}>
-                  {parkingStats.totalParkings}
-                </Text>
-                <Text style={[styles.statBoxLabel, { color: colors.textMuted }]}>
-                  Total Parkings
-                </Text>
-              </View>
-              
-              <View style={styles.statBox}>
-                <Text style={[styles.statBoxValue, { color: colors.text }]}>
-                  {parkingStats.lastWeekParkings}
-                </Text>
-                <Text style={[styles.statBoxLabel, { color: colors.textMuted }]}>
-                  This Week
-                </Text>
-              </View>
-            </View>
-            </AppCard>
           </Animated.View>
         )}
 
-        {/* Quick Save Button */}
-        <Animated.View 
-          style={{
-            transform: [{ translateY: slideAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [60, 0]
-            }) }]
-          }}
-        >
-          <AppButton
-            colors={colors}
-            onPress={handleSaveParking}
-            disabled={isLoading}
-            variant="primary"
-            style={styles.saveButton}
-            icon={isLoading ? <ActivityIndicator color={colors.textOnAccent} /> : <View style={[styles.saveButtonIcon, { backgroundColor: colors.surface }]}><Plus size={24} color={colors.accent} /></View>}
-            label={isLoading ? 'Saving...' : currentParking ? 'Update Location' : 'Save Parking Spot'}
-          />
-        </Animated.View>
+        {currentParking && (
+          <Animated.View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Insights / Stats</Text>
+            <View style={styles.statsGrid}>
+              <StatTile colors={colors} icon={<Navigation size={16} color={colors.accent} />} value={formatDistance(distance)} label="away" />
+              <StatTile colors={colors} icon={<Clock size={16} color={colors.accent} />} value={walkingTime !== null ? `${walkingTime}m` : '--'} label="walk" />
+              <StatTile colors={colors} icon={<Zap size={16} color={colors.accent} />} value={new Date(currentParking.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} label="parked" />
+            </View>
+          </Animated.View>
+        )}
+
+        {parkingStats.totalParkings > 0 && (
+          <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [46, 0] }) }] }]}>
+            <View style={[styles.statsSummaryRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.summaryItem}>
+                <TrendingUp size={16} color={colors.accent} />
+                <Text style={[styles.bodyText, { color: colors.text }]}>Total: {parkingStats.totalParkings}</Text>
+              </View>
+              <View style={styles.summaryItem}>
+                <Clock size={16} color={colors.accent} />
+                <Text style={[styles.bodyText, { color: colors.text }]}>Week: {parkingStats.lastWeekParkings}</Text>
+              </View>
+            </View>
+          </Animated.View>
+        )}
       </ScrollView>
 
       <TimerModal
@@ -523,62 +527,46 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 20,
-  },
-  headerTitle: {
-    fontSize: 34,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    marginTop: 4,
-  },
   bluetoothBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
     borderRadius: 20,
     borderWidth: 1,
   },
   bluetoothText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: TYPE_SCALE.caption,
+    fontWeight: '500',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 20,
+    gap: SPACING.lg,
   },
-  mainCard: {
-    borderRadius: 28,
-    padding: 26,
-    marginTop: 4,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 8,
+  section: {
+    gap: SPACING.sm,
+  },
+  sectionTitle: {
+    fontSize: TYPE_SCALE.sectionTitle,
+    fontWeight: '600',
+  },
+  heroCard: {
+    gap: SPACING.md,
   },
   carSection: {
     alignItems: 'center',
-    marginBottom: 20,
   },
   carIconBg: {
-    width: 88,
-    height: 88,
-    borderRadius: 28,
+    width: 76,
+    height: 76,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: SPACING.sm,
   },
   statusBadge: {
     flexDirection: 'row',
@@ -590,48 +578,25 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
-  statusText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  locationSection: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  locationText: {
-    fontSize: 20,
-    fontWeight: '700',
+  heroTitle: {
+    fontSize: TYPE_SCALE.title,
+    fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 28,
+    lineHeight: 36,
   },
   noteBadge: {
-    marginTop: 10,
+    marginTop: SPACING.xs,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 12,
+    alignSelf: 'center',
   },
-  noteText: {
-    fontSize: 13,
-    fontWeight: '500',
+  bodyText: {
+    fontSize: TYPE_SCALE.body,
+    fontWeight: '400',
   },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 16,
-    gap: 6,
-  },
-  statValue: {
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  statLabel: {
-    fontSize: 11,
+  captionText: {
+    fontSize: TYPE_SCALE.caption,
     fontWeight: '500',
   },
   timerAlert: {
@@ -642,50 +607,31 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 14,
-    marginBottom: 16,
   },
-  timerText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  timerCancel: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginLeft: 8,
-  },
-  navigateButton: {
+  primaryAction: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
+    gap: SPACING.sm,
+    paddingVertical: SPACING.md,
     borderRadius: 16,
-    marginBottom: 12,
   },
-  navigateButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  quickActions: {
+  toolsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: SPACING.sm,
   },
-  quickAction: {
+  toolItem: {
     width: '48%',
+    borderWidth: 1,
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: SPACING.sm,
     borderRadius: 12,
-    gap: 4,
-  },
-  quickActionText: {
-    fontSize: 12,
-    fontWeight: '600',
+    gap: SPACING.xs,
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: SPACING.md,
   },
   emptyIconBg: {
     width: 100,
@@ -693,18 +639,12 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
-  },
-  emptyTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: SPACING.md,
   },
   emptySubtitle: {
-    fontSize: 14,
     textAlign: 'center',
-    paddingHorizontal: 30,
-    lineHeight: 20,
+    paddingHorizontal: SPACING.lg,
+    lineHeight: 22,
   },
   alertBox: {
     flexDirection: 'row',
@@ -713,70 +653,25 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 12,
-    marginTop: 16,
+    marginTop: SPACING.sm,
   },
-  alertText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  statsCard: {
-    borderRadius: 24,
-    padding: 20,
-    marginTop: 16,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  statsHeader: {
+  statsGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
+    gap: SPACING.sm,
   },
-  statsTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  statsRow: {
+  statsSummaryRow: {
     flexDirection: 'row',
-    gap: 12,
-  },
-  statBox: {
-    flex: 1,
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 16,
-    borderRadius: 16,
-  },
-  statBoxValue: {
-    fontSize: 28,
-    fontWeight: '800',
-  },
-  statBoxLabel: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingVertical: 16,
-    borderRadius: 16,
-    marginTop: 16,
-  },
-  saveButtonIcon: {
-    width: 40,
-    height: 40,
+    borderWidth: 1,
     borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
   },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
+  summaryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
   },
   // Modal styles
   modalOverlay: {
