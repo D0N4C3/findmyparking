@@ -19,7 +19,7 @@ export function HomeHeader({ colors, showAutoDetectionBadge, pulseAnim }: HomeHe
   return (
     <SectionHeader
       colors={colors}
-      title="ParkPing"
+      title="CarPing"
       subtitle="Never forget where you parked"
       right={showAutoDetectionBadge ? (
         <Animated.View style={[styles.bluetoothBadge, { backgroundColor: colors.surface, borderColor: colors.border, transform: [{ scale: pulseAnim }] }]}>

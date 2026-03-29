@@ -220,8 +220,8 @@ export default function SettingsScreen() {
   const handleShareApp = useCallback(async () => {
     try {
       await Share.share({
-        message: 'Check out ParkPing - Never forget where you parked again!',
-        title: 'ParkPing',
+        message: 'Check out CarPing - Never forget where you parked again!',
+        title: 'CarPing',
       });
     } catch {
       showError(DIALOG_COPY.errors.shareApp.title, DIALOG_COPY.errors.shareApp.message);
@@ -232,7 +232,7 @@ export default function SettingsScreen() {
     if (value && !savedBluetoothDevice) {
       showConfirm({
         title: 'Select a Bluetooth device first',
-        message: 'Pick your car Bluetooth device so ParkPing knows what to monitor.',
+        message: 'Pick your car Bluetooth device so CarPing knows what to monitor.',
         confirmLabel: 'Select Device',
         onConfirm: handleSelectBluetoothDevice,
       });
@@ -521,7 +521,7 @@ export default function SettingsScreen() {
             
             <SettingItem
               icon={<Share2 size={22} color={colors.accent} />}
-              title="Share ParkPing"
+              title="Share CarPing"
               subtitle="Tell your friends about the app"
               onPress={handleShareApp}
               colors={colors}
@@ -543,7 +543,7 @@ export default function SettingsScreen() {
             
             <SettingItem
               icon={<Info size={22} color={colors.accent} />}
-              title="About ParkPing"
+              title="About CarPing"
               subtitle="Version 1.0.0"
               colors={colors}
             />
@@ -551,13 +551,20 @@ export default function SettingsScreen() {
             <SettingItem
               icon={<Shield size={22} color={colors.accent} />}
               title="Privacy Policy"
-              onPress={() => Linking.openURL('https://parkping.app/privacy')}
+              onPress={() => Linking.openURL('https://carping.netlify.app/privacy.html')}
+              colors={colors}
+            />
+
+            <SettingItem
+              icon={<Shield size={22} color={colors.accent} />}
+              title="Terms of Use"
+              onPress={() => Linking.openURL('https://carping.netlify.app/terms.html')}
               colors={colors}
             />
 
             <SettingItem
               icon={<Heart size={22} color={colors.accent} />}
-              title="Rate ParkPing"
+              title="Rate CarPing"
               onPress={() => Linking.openURL('https://apps.apple.com')}
               colors={colors}
             />
@@ -566,7 +573,7 @@ export default function SettingsScreen() {
           {/* Footer */}
           <View style={styles.footer}>
             <Text style={[styles.footerText, { color: colors.textMuted }]}>
-              ParkPing v1.0.0
+              CarPing v1.0.0
             </Text>
             <Text style={[styles.footerSubtext, { color: colors.textMuted }]}>
               Never forget where you parked
