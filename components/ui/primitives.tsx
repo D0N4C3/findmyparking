@@ -125,6 +125,48 @@ export function StatTile({ colors, icon, value, label, style }: StatTileProps) {
   );
 }
 
+
+
+type AppPrimaryButtonProps = Omit<AppButtonProps, 'variant'>;
+
+export function AppPrimaryButton(props: AppPrimaryButtonProps) {
+  return <AppButton {...props} variant="primary" />;
+}
+
+type AppSecondaryButtonProps = Omit<AppButtonProps, 'variant'>;
+
+export function AppSecondaryButton(props: AppSecondaryButtonProps) {
+  return <AppButton {...props} variant="secondary" />;
+}
+
+interface MetricChipProps {
+  colors: ColorTheme;
+  icon: ReactNode;
+  value: string;
+  label: string;
+  style?: StyleProp<ViewStyle>;
+}
+
+export function MetricChip({ colors, icon, value, label, style }: MetricChipProps) {
+  return <StatTile colors={colors} icon={icon} value={value} label={label} style={style} />;
+}
+
+interface InfoTileProps {
+  colors: ColorTheme;
+  icon: ReactNode;
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+}
+
+export function InfoTile({ colors, icon, children, style }: InfoTileProps) {
+  return (
+    <View style={[styles.infoTile, { backgroundColor: colors.card, borderColor: colors.border }, style]}>
+      {icon}
+      {children}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   card: {
     borderRadius: radius.xl,
@@ -171,5 +213,15 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 11,
     fontWeight: '500',
+  },
+  infoTile: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
 });
