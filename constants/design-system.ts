@@ -9,10 +9,13 @@ export const spacing = {
 } as const;
 
 export const radius = {
-  sm: 10,
-  md: 14,
-  lg: 18,
+  sm: 8,
+  md: 12,
+  lg: 16,
   xl: 24,
+  hero: 24,
+  standard: 14,
+  chip: 10,
   pill: 999,
 } as const;
 
@@ -48,21 +51,21 @@ export const elevation = {
     elevation: 0,
   },
   sm: {
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   md: {
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
   lg: {
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.16,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
   },
 } as const;

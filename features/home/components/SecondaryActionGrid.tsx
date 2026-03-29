@@ -21,10 +21,10 @@ export function SecondaryActionGrid({ viewModel, onShare, onOpenNote, onOpenMap,
 
   return (
     <View style={styles.toolsGrid}>
-      <AppSecondaryButton colors={colors} label="Share" icon={<Share2 size={16} color={colors.text} />} onPress={onShare} style={styles.toolItem} />
-      <AppSecondaryButton colors={colors} label="Note" icon={<MapPin size={16} color={colors.text} />} onPress={onOpenNote} style={styles.toolItem} />
-      <AppSecondaryButton colors={colors} label="Map" icon={<MoreHorizontal size={16} color={colors.text} />} onPress={onOpenMap} style={styles.toolItem} />
-      <AppSecondaryButton colors={colors} label="Timer" icon={<Timer size={16} color={colors.text} />} onPress={onOpenTimer} style={styles.toolItem} />
+      <AppSecondaryButton colors={colors} label="Share" icon={<Share2 size={18} color={colors.textPrimary ?? colors.text} />} onPress={onShare} style={styles.toolItem} />
+      <AppSecondaryButton colors={colors} label="Note" icon={<MapPin size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenNote} style={styles.toolItem} />
+      <AppSecondaryButton colors={colors} label="Map" icon={<MoreHorizontal size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenMap} style={styles.toolItem} />
+      <AppSecondaryButton colors={colors} label="Timer" icon={<Timer size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenTimer} style={styles.toolItem} />
     </View>
   );
 }
@@ -38,8 +38,10 @@ const styles = StyleSheet.create({
   toolItem: {
     width: '48%',
     borderWidth: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 8,
+    minHeight: 56,
+    paddingVertical: 10,
+    borderRadius: 14,
+    gap: 6,
+    justifyContent: 'center',
   },
 });

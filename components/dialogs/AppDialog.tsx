@@ -52,7 +52,7 @@ export function AppDialog({
             {
               backgroundColor: colors.cardElevated,
               borderColor: colors.border,
-              shadowColor: colors.shadowStrong,
+              shadowColor: colors.shadow,
               transform: [{ scale }],
             },
           ]}
@@ -77,11 +77,11 @@ const styles = StyleSheet.create({
   dialog: {
     width: '100%',
     maxWidth: 420,
-    borderRadius: radius.xl,
+    borderRadius: radius.hero,
     borderWidth: 1,
     padding: spacing.lg,
     gap: spacing.sm,
-    ...elevation.lg,
+    ...elevation.md,
   },
   iconContainer: {
     alignSelf: 'center',
