@@ -26,8 +26,9 @@ import {
   Linking,
   Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Component, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
@@ -135,6 +136,8 @@ export default function MapScreen() {
   const isDark = theme?.isDark ?? false;
   const colors = isDark ? Colors.dark : Colors.light;
   const { showError } = useDialog();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   
   const mapRef = useRef<MapView>(null);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
@@ -221,8 +224,10 @@ export default function MapScreen() {
   const bottomPanelPeekHeight = Math.min(Math.max(screenHeight * 0.28, 220), 300);
   const googleMapsApiKey =
     Constants.expoConfig?.android?.config?.googleMaps?.apiKey ??
-    Constants.manifest2?.extra?.expoClient?.android?.config?.googleMaps?.apiKey;
-  const isAndroidMapKeyMissing = Platform.OS === 'android' && !googleMapsApiKey;
+    Constants.manifest2?.extra?.expoClient?.android?.config?.googleMaps?.apiKey ??
+    process.env.EXPO_PUBLIC_GOOGLE_ANDROID_GEO_API_KEY;
+  const isExpoGo = Constants.appOwnership === 'expo';
+  const isAndroidMapKeyMissing = Platform.OS === 'android' && !googleMapsApiKey && !isExpoGo;
 
   const handleRecenter = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -597,7 +602,7 @@ export default function MapScreen() {
           <View style={[styles.mapWarningCard, { backgroundColor: colors.card }]}>
             <Text style={[styles.mapWarningTitle, { color: colors.text }]}>Map setup required</Text>
             <Text style={[styles.mapWarningSubtitle, { color: colors.textSecondary }]}>
-              Google Maps key is missing for Android. Add GOOGLE_ANDROID_GEO_API_KEY before building to prevent the gray map.
+              Google Maps key is missing for Android. Add GOOGLE_ANDROID_GEO_API_KEY and rebuild your dev client/app (Expo Go cannot load native map keys).
             </Text>
           </View>
         )}
@@ -702,6 +707,7 @@ export default function MapScreen() {
             backgroundColor: colors.card,
             transform: [{ translateY: slideAnim }],
             minHeight: bottomPanelPeekHeight,
+            marginBottom: tabBarHeight + Math.max(insets.bottom, 8),
           }
         ]}
       >
@@ -1039,7 +1045,6 @@ const styles = StyleSheet.create({
   },
   bottomPanel: {
     marginHorizontal: 8,
-    marginBottom: 8,
     paddingHorizontal: 22,
     paddingTop: 18,
     paddingBottom: 20,
