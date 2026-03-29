@@ -14,5 +14,7 @@ export interface HomeViewModel {
   parkedAtText: string;
   parkedAgoText: string;
   noteOrSpotText: string | null;
+  locationStatusText: string;
+  shouldShowUpdateLocation: boolean;
   parkingStats: ParkingStats;
 }

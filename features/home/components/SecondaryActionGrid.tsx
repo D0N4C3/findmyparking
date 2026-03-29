@@ -1,7 +1,8 @@
 import { AppSecondaryButton } from '@/components/ui/primitives';
 import { HomeViewModel } from '@/features/home/home-view-model';
-import { MapPin, MoreHorizontal, Share2, Timer } from 'lucide-react-native';
-import { StyleSheet, View } from 'react-native';
+import { ChevronDown, ChevronUp, MapPin, Route, Share2, Timer } from 'lucide-react-native';
+import { useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 interface SecondaryActionGridProps {
   viewModel: HomeViewModel;
@@ -18,18 +19,45 @@ interface SecondaryActionGridProps {
  */
 export function SecondaryActionGrid({ viewModel, onShare, onOpenNote, onOpenMap, onOpenTimer }: SecondaryActionGridProps) {
   const { colors } = viewModel;
+  const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <View style={styles.toolsGrid}>
-      <AppSecondaryButton colors={colors} label="Share" icon={<Share2 size={18} color={colors.textPrimary ?? colors.text} />} onPress={onShare} style={styles.toolItem} />
-      <AppSecondaryButton colors={colors} label="Note" icon={<MapPin size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenNote} style={styles.toolItem} />
-      <AppSecondaryButton colors={colors} label="Map" icon={<MoreHorizontal size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenMap} style={styles.toolItem} />
-      <AppSecondaryButton colors={colors} label="Timer" icon={<Timer size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenTimer} style={styles.toolItem} />
+    <View style={styles.container}>
+      <AppSecondaryButton
+        colors={colors}
+        label={isExpanded ? 'Hide tools' : 'More tools'}
+        onPress={() => setIsExpanded((prev) => !prev)}
+        icon={isExpanded ? <ChevronUp size={18} color={colors.textPrimary ?? colors.text} /> : <ChevronDown size={18} color={colors.textPrimary ?? colors.text} />}
+        style={styles.toggleButton}
+      />
+
+      {isExpanded ? (
+        <>
+          <Text style={[styles.helperText, { color: colors.textMuted }]}>Tertiary actions for note sharing and parking timers.</Text>
+          <View style={styles.toolsGrid}>
+            <AppSecondaryButton colors={colors} label="Share" icon={<Share2 size={18} color={colors.textPrimary ?? colors.text} />} onPress={onShare} style={styles.toolItem} />
+            <AppSecondaryButton colors={colors} label="Note" icon={<MapPin size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenNote} style={styles.toolItem} />
+            <AppSecondaryButton colors={colors} label="Route" icon={<Route size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenMap} style={styles.toolItem} />
+            <AppSecondaryButton colors={colors} label="Timer" icon={<Timer size={18} color={colors.textPrimary ?? colors.text} />} onPress={onOpenTimer} style={styles.toolItem} />
+          </View>
+        </>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    gap: 10,
+  },
+  toggleButton: {
+    minHeight: 52,
+    borderRadius: 14,
+  },
+  helperText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
   toolsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
