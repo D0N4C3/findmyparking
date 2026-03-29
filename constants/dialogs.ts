@@ -54,6 +54,10 @@ export const DIALOG_COPY = {
       title: 'No parking spot saved yet',
       message: 'Save a parking spot and make sure GPS is enabled to continue.',
     },
+    locationUnavailableForNavigation: {
+      title: 'Location unavailable',
+      message: 'Enable location/GPS to start in-app navigation.',
+    },
   },
   actions: {
     ok: { id: 'ok', label: 'OK', role: 'default' as const },
