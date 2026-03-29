@@ -9,7 +9,7 @@ module.exports = {
         ...(expo.android?.config ?? {}),
         googleMaps: {
           ...((expo.android?.config && expo.android.config.googleMaps) ?? {}),
-          apiKey: process.env.GOOGLE_ANDROID_GEO_API_KEY,
+          apiKey: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_GEO_API_KEY,
         },
       },
     },
