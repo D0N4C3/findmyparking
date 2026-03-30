@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "FindMyParking",
-    "slug": "findmyparking-qyv22uyaixxn13rdbbij",
+    "name": "CarPing",
+    "slug": "carping",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -62,7 +62,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "15c9872e-dde4-4af4-a51b-c5227e167a4f"
+        "projectId": "dd2756a7-2c04-47a7-9fef-6b103182aec3"
       }
     }
   }
