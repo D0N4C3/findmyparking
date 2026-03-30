@@ -4,6 +4,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  Switch,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  BluetoothDevice,
   BluetoothConnectionResult,
   BluetoothScanResult,
   scanBluetoothDevices,
@@ -55,16 +57,20 @@ export function BluetoothDevicePickerSheet({
   const [pendingDevice, setPendingDevice] = useState<CarBluetoothDevice | null>(null);
   const [connectionResult, setConnectionResult] = useState<BluetoothConnectionResult | null>(null);
   const [isValidatingConnection, setIsValidatingConnection] = useState(false);
+  const [scanDurationMs, setScanDurationMs] = useState(15_000);
+  const [prioritizePaired, setPrioritizePaired] = useState(true);
+  const [prioritizeSignal, setPrioritizeSignal] = useState(true);
+  const [showUnknownDevices, setShowUnknownDevices] = useState(false);
 
   const runBluetoothScan = useCallback(async () => {
     setIsScanningBluetooth(true);
     setScanResult(null);
     setConnectionResult(null);
 
-    const result = await scanBluetoothDevices({ timeoutMs: 10_000, retries: 1 });
+    const result = await scanBluetoothDevices({ timeoutMs: scanDurationMs, retries: 2 });
     setScanResult(result);
     setIsScanningBluetooth(false);
-  }, []);
+  }, [scanDurationMs]);
 
   useEffect(() => {
     if (!visible) return;
@@ -77,7 +83,41 @@ export function BluetoothDevicePickerSheet({
     scanResult && ['permission-denied', 'unsupported', 'error', 'timeout'].includes(scanResult.status)
   );
 
-  const scannedDevices = useMemo(() => scanResult?.devices ?? [], [scanResult?.devices]);
+  const formatLastSeenLabel = useCallback((lastSeenAt?: number) => {
+    if (!lastSeenAt) return null;
+
+    const elapsedMs = Date.now() - lastSeenAt;
+    const elapsedSeconds = Math.max(0, Math.round(elapsedMs / 1000));
+    if (elapsedSeconds < 60) {
+      return `${elapsedSeconds}s ago`;
+    }
+
+    const elapsedMinutes = Math.round(elapsedSeconds / 60);
+    return `${elapsedMinutes}m ago`;
+  }, []);
+
+  const scannedDevices = useMemo(() => {
+    const devices = scanResult?.devices ?? [];
+
+    return [...devices]
+      .filter((device) => (showUnknownDevices ? true : device.name !== 'Unknown device'))
+      .sort((a: BluetoothDevice, b: BluetoothDevice) => {
+        if (a.name === 'Unknown device' && b.name !== 'Unknown device') return 1;
+        if (a.name !== 'Unknown device' && b.name === 'Unknown device') return -1;
+
+        if (prioritizePaired && Boolean(a.isPaired) !== Boolean(b.isPaired)) {
+          return a.isPaired ? -1 : 1;
+        }
+
+        const aRssi = typeof a.rssi === 'number' ? a.rssi : -Infinity;
+        const bRssi = typeof b.rssi === 'number' ? b.rssi : -Infinity;
+        if (prioritizeSignal && aRssi !== bRssi) {
+          return bRssi - aRssi;
+        }
+
+        return a.name.localeCompare(b.name);
+      });
+  }, [prioritizePaired, prioritizeSignal, scanResult?.devices, showUnknownDevices]);
 
   const confirmDevice = useCallback(async () => {
     if (!pendingDevice) return;
@@ -127,6 +167,43 @@ export function BluetoothDevicePickerSheet({
               <Text style={[styles.scanStateText, { color: colors.textMuted }]}>{scanResult.message}</Text>
             </View>
           ) : null}
+          <View style={[styles.scanControls, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+            <Text style={[styles.scanControlsTitle, { color: colors.text }]}>Scan duration</Text>
+            <View style={styles.durationOptions}>
+              {[10_000, 15_000, 25_000].map((duration) => {
+                const selected = duration === scanDurationMs;
+                return (
+                  <TouchableOpacity
+                    key={duration}
+                    style={[
+                      styles.durationOption,
+                      {
+                        borderColor: selected ? colors.accent : colors.border,
+                        backgroundColor: selected ? colors.accent + '20' : 'transparent',
+                      },
+                    ]}
+                    onPress={() => setScanDurationMs(duration)}
+                  >
+                    <Text style={[styles.durationOptionText, { color: selected ? colors.accent : colors.textMuted }]}>
+                      {Math.round(duration / 1000)}s
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <View style={styles.toggleRow}>
+              <Text style={[styles.toggleLabel, { color: colors.text }]}>Paired devices first</Text>
+              <Switch value={prioritizePaired} onValueChange={setPrioritizePaired} trackColor={{ true: colors.accent }} />
+            </View>
+            <View style={styles.toggleRow}>
+              <Text style={[styles.toggleLabel, { color: colors.text }]}>Strongest signal first</Text>
+              <Switch value={prioritizeSignal} onValueChange={setPrioritizeSignal} trackColor={{ true: colors.accent }} />
+            </View>
+            <View style={styles.toggleRow}>
+              <Text style={[styles.toggleLabel, { color: colors.text }]}>Show unknown devices</Text>
+              <Switch value={showUnknownDevices} onValueChange={setShowUnknownDevices} trackColor={{ true: colors.accent }} />
+            </View>
+          </View>
 
           <ScrollView style={styles.scanResultsList} contentContainerStyle={styles.scanResultsContent}>
             {scannedDevices.map((device) => {
@@ -145,6 +222,19 @@ export function BluetoothDevicePickerSheet({
                   <View style={styles.deviceItemText}>
                     <Text style={[styles.deviceName, { color: colors.text }]}>{device.name}</Text>
                     <Text style={[styles.deviceAddress, { color: colors.textMuted }]}>{device.address}</Text>
+                    <View style={styles.metaRow}>
+                      {device.isPaired ? (
+                        <Text style={[styles.deviceMetaText, { color: colors.success }]}>Paired</Text>
+                      ) : null}
+                      {typeof device.rssi === 'number' ? (
+                        <Text style={[styles.deviceMetaText, { color: colors.textMuted }]}>RSSI {device.rssi} dBm</Text>
+                      ) : null}
+                      {formatLastSeenLabel(device.lastSeenAt) ? (
+                        <Text style={[styles.deviceMetaText, { color: colors.textMuted }]}>
+                          Last seen {formatLastSeenLabel(device.lastSeenAt)}
+                        </Text>
+                      ) : null}
+                    </View>
                   </View>
                   {isSaved ? <Text style={[styles.selectedText, { color: colors.success }]}>Saved</Text> : null}
                 </TouchableOpacity>
@@ -177,7 +267,9 @@ export function BluetoothDevicePickerSheet({
 
           <View style={styles.sheetActions}>
             <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.surfaceSecondary }]} onPress={() => void runBluetoothScan()}>
-              <Text style={[styles.actionButtonText, { color: colors.text }]}>Scan Again</Text>
+              <Text style={[styles.actionButtonText, { color: colors.text }]}>
+                Scan Again ({Math.round(scanDurationMs / 1000)}s)
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -230,6 +322,19 @@ const styles = StyleSheet.create({
   scanStateErrorText: { fontSize: 14, flex: 1, fontWeight: '600' },
   scanResultsList: { maxHeight: 260 },
   scanResultsContent: { gap: 8, paddingBottom: 4 },
+  scanControls: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  scanControlsTitle: { fontSize: 13, fontWeight: '700' },
+  durationOptions: { flexDirection: 'row', gap: 8 },
+  durationOption: { borderRadius: 999, borderWidth: 1, paddingVertical: 4, paddingHorizontal: 10 },
+  durationOptionText: { fontSize: 12, fontWeight: '600' },
+  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  toggleLabel: { fontSize: 13, fontWeight: '500' },
   deviceItem: {
     borderRadius: 12,
     borderWidth: 1,
@@ -242,6 +347,8 @@ const styles = StyleSheet.create({
   deviceItemText: { flex: 1, gap: 2 },
   deviceName: { fontSize: 15, fontWeight: '600' },
   deviceAddress: { fontSize: 13 },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  deviceMetaText: { fontSize: 12, fontWeight: '500' },
   selectedText: { fontSize: 12, fontWeight: '700' },
   sheetActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
   actionButton: { flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
