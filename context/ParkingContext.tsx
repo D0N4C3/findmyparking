@@ -13,7 +13,13 @@ import {
 import { getOnboardingState } from '@/services/onboarding';
 import { useDialog } from '@/context/DialogContext';
 import { DIALOG_COPY } from '@/constants/dialogs';
-import { FavoritePlace, NavigationTargetEntity, ParkingZone, QuickNavigationPreset } from '@/types/parking';
+import {
+  FavoritePlace,
+  ManualDestination,
+  NavigationTargetEntity,
+  ParkingZone,
+  QuickNavigationPreset,
+} from '@/types/parking';
 
 export interface ParkingSpot {
   id: string;
@@ -73,6 +79,7 @@ interface ParkingContextType {
   favoritePlaces: FavoritePlace[];
   offlineParkingZones: ParkingZone[];
   quickNavigationPresets: QuickNavigationPreset[];
+  manualDestination: ManualDestination | null;
   navigationTarget: NavigationTargetEntity | null;
   addFavoritePlace: (favorite: Omit<FavoritePlace, 'id' | 'createdAt'>) => Promise<void>;
   removeFavoritePlace: (favoriteId: string) => Promise<void>;
@@ -84,6 +91,9 @@ interface ParkingContextType {
   updateQuickNavigationPreset: (presetId: string, updates: Partial<Omit<QuickNavigationPreset, 'id' | 'createdAt'>>) => Promise<void>;
   removeQuickNavigationPreset: (presetId: string) => Promise<void>;
   listQuickNavigationPresets: () => QuickNavigationPreset[];
+  createManualDestination: (destination: Pick<ManualDestination, 'latitude' | 'longitude'> & Partial<Pick<ManualDestination, 'label'>>) => Promise<ManualDestination>;
+  updateManualDestination: (updates: Partial<Pick<ManualDestination, 'latitude' | 'longitude' | 'label'>>) => Promise<void>;
+  removeManualDestination: () => Promise<void>;
   setNavigationTarget: (target: NavigationTargetEntity | null) => void;
 }
 
@@ -97,6 +107,7 @@ const STORAGE_KEYS = {
   favoritePlaces: '@parkping/favorite_places',
   offlineParkingZones: '@parkping/offline_parking_zones',
   quickNavigationPresets: '@parkping/quick_nav_presets',
+  manualDestination: '@parkping/manual_destination',
 };
 
 function createParkingSpotId() {
@@ -150,6 +161,18 @@ function isQuickPreset(value: unknown): value is QuickNavigationPreset {
   );
 }
 
+function isManualDestination(value: unknown): value is ManualDestination {
+  const destination = value as ManualDestination;
+  return (
+    typeof destination?.id === 'string' &&
+    typeof destination?.label === 'string' &&
+    typeof destination?.latitude === 'number' &&
+    typeof destination?.longitude === 'number' &&
+    typeof destination?.createdAt === 'number' &&
+    typeof destination?.updatedAt === 'number'
+  );
+}
+
 export const [ParkingProvider, useParking] = createContextHook<ParkingContextType>(() => {
   const { showError } = useDialog();
   const [currentParking, setCurrentParking] = useState<ParkingSpot | null>(null);
@@ -172,6 +195,7 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
   const [favoritePlaces, setFavoritePlaces] = useState<FavoritePlace[]>([]);
   const [offlineParkingZones, setOfflineParkingZones] = useState<ParkingZone[]>([]);
   const [quickNavigationPresets, setQuickNavigationPresets] = useState<QuickNavigationPreset[]>([]);
+  const [manualDestination, setManualDestination] = useState<ManualDestination | null>(null);
   const [navigationTarget, setNavigationTarget] = useState<NavigationTargetEntity | null>(null);
 
   useEffect(() => {
@@ -243,6 +267,7 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
         favoritePlacesData,
         offlineParkingZonesData,
         quickNavigationPresetsData,
+        manualDestinationData,
       ] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.currentParking),
         AsyncStorage.getItem(STORAGE_KEYS.parkingHistory),
@@ -252,6 +277,7 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
         AsyncStorage.getItem(STORAGE_KEYS.favoritePlaces),
         AsyncStorage.getItem(STORAGE_KEYS.offlineParkingZones),
         AsyncStorage.getItem(STORAGE_KEYS.quickNavigationPresets),
+        AsyncStorage.getItem(STORAGE_KEYS.manualDestination),
       ]);
 
       if (onboardingState.completed) {
@@ -317,6 +343,9 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
             [],
           ),
         );
+      }
+      if (manualDestinationData) {
+        setManualDestination(parseStoredValue(manualDestinationData, isManualDestination, null));
       }
     } catch (error) {
       console.error('Error loading saved data:', error);
@@ -715,6 +744,45 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
 
   const listQuickNavigationPresets = useCallback(() => quickNavigationPresets, [quickNavigationPresets]);
 
+  const createManualDestination = useCallback(
+    async (destination: Pick<ManualDestination, 'latitude' | 'longitude'> & Partial<Pick<ManualDestination, 'label'>>) => {
+      const now = Date.now();
+      const nextDestination: ManualDestination = {
+        id: `manual-${now}-${Math.random().toString(36).slice(2, 6)}`,
+        latitude: destination.latitude,
+        longitude: destination.longitude,
+        label: destination.label?.trim() || 'Manual pin',
+        createdAt: now,
+        updatedAt: now,
+      };
+      setManualDestination(nextDestination);
+      await AsyncStorage.setItem(STORAGE_KEYS.manualDestination, JSON.stringify(nextDestination));
+      return nextDestination;
+    },
+    [],
+  );
+
+  const updateManualDestination = useCallback(
+    async (updates: Partial<Pick<ManualDestination, 'latitude' | 'longitude' | 'label'>>) => {
+      if (!manualDestination) return;
+      const nextDestination: ManualDestination = {
+        ...manualDestination,
+        ...updates,
+        label: updates.label?.trim() || manualDestination.label,
+        updatedAt: Date.now(),
+      };
+      setManualDestination(nextDestination);
+      await AsyncStorage.setItem(STORAGE_KEYS.manualDestination, JSON.stringify(nextDestination));
+    },
+    [manualDestination],
+  );
+
+  const removeManualDestination = useCallback(async () => {
+    setManualDestination(null);
+    setNavigationTarget((prev) => (prev?.kind === 'manual-pin' ? null : prev));
+    await AsyncStorage.removeItem(STORAGE_KEYS.manualDestination);
+  }, []);
+
   const parkingStats = useMemo(() => calculateStats(), [calculateStats]);
 
   return useMemo(() => ({
@@ -746,6 +814,7 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     favoritePlaces,
     offlineParkingZones,
     quickNavigationPresets,
+    manualDestination,
     navigationTarget,
     addFavoritePlace,
     removeFavoritePlace,
@@ -757,6 +826,9 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     updateQuickNavigationPreset,
     removeQuickNavigationPreset,
     listQuickNavigationPresets,
+    createManualDestination,
+    updateManualDestination,
+    removeManualDestination,
     setNavigationTarget,
   }), [
     currentParking,
@@ -787,6 +859,7 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     favoritePlaces,
     offlineParkingZones,
     quickNavigationPresets,
+    manualDestination,
     navigationTarget,
     addFavoritePlace,
     removeFavoritePlace,
@@ -798,6 +871,9 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     updateQuickNavigationPreset,
     removeQuickNavigationPreset,
     listQuickNavigationPresets,
+    createManualDestination,
+    updateManualDestination,
+    removeManualDestination,
     setNavigationTarget,
   ]);
 });

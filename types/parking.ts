@@ -36,6 +36,15 @@ export interface QuickNavigationPreset {
   updatedAt: number;
 }
 
+export interface ManualDestination {
+  id: string;
+  label: string;
+  latitude: number;
+  longitude: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export type NavigationTargetEntity =
   | {
       kind: 'current-parking';
@@ -59,6 +68,7 @@ export type NavigationTargetEntity =
     }
   | {
       kind: 'manual-pin';
+      destinationId: string;
       latitude: number;
       longitude: number;
       label: string;
