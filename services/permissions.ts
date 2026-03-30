@@ -60,16 +60,28 @@ export const getBluetoothPermissionStatus = async (): Promise<PermissionBadgeSta
       return 'granted';
     }
 
-    const [scanPermission, connectPermission] = await Promise.all([
-      PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN),
-      PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT),
-    ]);
+    const bluetoothPermissions =
+      Platform.Version >= 31
+        ? [
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          ]
+        : [
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH,
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADMIN,
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          ];
 
-    if (scanPermission && connectPermission) {
+    const permissionResults = await Promise.all(
+      bluetoothPermissions.map((permission) => PermissionsAndroid.check(permission))
+    );
+
+    if (permissionResults.every(Boolean)) {
       return 'granted';
     }
 
-    if (scanPermission || connectPermission) {
+    if (permissionResults.some(Boolean)) {
       return 'limited';
     }
 
@@ -109,14 +121,24 @@ export const getPermissionStatuses = async (): Promise<PermissionStatuses> => {
 };
 
 const requestBluetoothPermissions = async () => {
-  if (Platform.OS !== 'android' || Platform.Version < 31) {
+  if (Platform.OS !== 'android') {
     return;
   }
 
-  await PermissionsAndroid.requestMultiple([
-    PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-    PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-  ]);
+  const bluetoothPermissions =
+    Platform.Version >= 31
+      ? [
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        ]
+      : [
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADMIN,
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        ];
+
+  await PermissionsAndroid.requestMultiple(bluetoothPermissions);
 };
 
 export const orchestrateStartupPermissions = async ({
