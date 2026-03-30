@@ -13,7 +13,7 @@ import {
 import { getOnboardingState } from '@/services/onboarding';
 import { useDialog } from '@/context/DialogContext';
 import { DIALOG_COPY } from '@/constants/dialogs';
-import { FavoritePlace, ParkingZone, QuickNavigationPreset } from '@/types/parking';
+import { FavoritePlace, NavigationTargetEntity, ParkingZone, QuickNavigationPreset } from '@/types/parking';
 
 export interface ParkingSpot {
   id: string;
@@ -73,8 +73,18 @@ interface ParkingContextType {
   favoritePlaces: FavoritePlace[];
   offlineParkingZones: ParkingZone[];
   quickNavigationPresets: QuickNavigationPreset[];
+  navigationTarget: NavigationTargetEntity | null;
   addFavoritePlace: (favorite: Omit<FavoritePlace, 'id' | 'createdAt'>) => Promise<void>;
   removeFavoritePlace: (favoriteId: string) => Promise<void>;
+  addOfflineParkingZone: (zone: Omit<ParkingZone, 'id' | 'createdAt' | 'updatedAt'>) => Promise<ParkingZone>;
+  updateOfflineParkingZone: (zoneId: string, updates: Partial<Omit<ParkingZone, 'id' | 'createdAt'>>) => Promise<void>;
+  removeOfflineParkingZone: (zoneId: string) => Promise<void>;
+  listOfflineParkingZones: () => ParkingZone[];
+  addQuickNavigationPreset: (preset: Omit<QuickNavigationPreset, 'id' | 'createdAt' | 'updatedAt'>) => Promise<QuickNavigationPreset>;
+  updateQuickNavigationPreset: (presetId: string, updates: Partial<Omit<QuickNavigationPreset, 'id' | 'createdAt'>>) => Promise<void>;
+  removeQuickNavigationPreset: (presetId: string) => Promise<void>;
+  listQuickNavigationPresets: () => QuickNavigationPreset[];
+  setNavigationTarget: (target: NavigationTargetEntity | null) => void;
 }
 
 const STORAGE_KEYS = {
@@ -91,6 +101,53 @@ const STORAGE_KEYS = {
 
 function createParkingSpotId() {
   return `park-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function parseStoredValue<T>(raw: string | null, guard: (value: unknown) => value is T, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return guard(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function hasCoordinate(value: unknown): value is { latitude: number; longitude: number } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { latitude?: unknown }).latitude === 'number' &&
+    typeof (value as { longitude?: unknown }).longitude === 'number'
+  );
+}
+
+function isParkingZone(value: unknown): value is ParkingZone {
+  const zone = value as ParkingZone;
+  return (
+    typeof zone?.id === 'string' &&
+    typeof zone?.name === 'string' &&
+    Array.isArray(zone?.polygon) &&
+    zone.polygon.every(hasCoordinate) &&
+    hasCoordinate(zone?.center) &&
+    typeof zone?.zoneType === 'string' &&
+    typeof zone?.cacheStatus === 'string' &&
+    typeof zone?.source === 'string' &&
+    typeof zone?.createdAt === 'number' &&
+    typeof zone?.updatedAt === 'number'
+  );
+}
+
+function isQuickPreset(value: unknown): value is QuickNavigationPreset {
+  const preset = value as QuickNavigationPreset;
+  return (
+    typeof preset?.id === 'string' &&
+    typeof preset?.label === 'string' &&
+    hasCoordinate(preset?.destination) &&
+    (preset?.mode === 'walking' || preset?.mode === 'driving') &&
+    typeof preset?.createdAt === 'number' &&
+    typeof preset?.updatedAt === 'number'
+  );
 }
 
 export const [ParkingProvider, useParking] = createContextHook<ParkingContextType>(() => {
@@ -115,6 +172,7 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
   const [favoritePlaces, setFavoritePlaces] = useState<FavoritePlace[]>([]);
   const [offlineParkingZones, setOfflineParkingZones] = useState<ParkingZone[]>([]);
   const [quickNavigationPresets, setQuickNavigationPresets] = useState<QuickNavigationPreset[]>([]);
+  const [navigationTarget, setNavigationTarget] = useState<NavigationTargetEntity | null>(null);
 
   useEffect(() => {
     void loadSavedData();
@@ -198,26 +256,68 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
 
       if (onboardingState.completed) {
         if (parkingData) {
-          setCurrentParking(JSON.parse(parkingData));
+          setCurrentParking(parseStoredValue(parkingData, (value): value is ParkingSpot => typeof value === 'object' && value !== null && typeof (value as ParkingSpot).id === 'string' && typeof (value as ParkingSpot).latitude === 'number' && typeof (value as ParkingSpot).longitude === 'number' && typeof (value as ParkingSpot).timestamp === 'number', null));
           console.log('[ParkingContext] hydrated current parking from storage');
         }
-        if (historyData) setParkingHistory(JSON.parse(historyData));
+        if (historyData) {
+          const nextHistory = parseStoredValue(historyData, (value): value is ParkingSpot[] =>
+            Array.isArray(value) &&
+            value.every((item) => typeof item === 'object' && item !== null && typeof (item as ParkingSpot).id === 'string'),
+          []);
+          setParkingHistory(nextHistory);
+        }
       } else if (parkingData || historyData) {
         await AsyncStorage.multiRemove([STORAGE_KEYS.currentParking, STORAGE_KEYS.parkingHistory]);
         console.log('[ParkingContext] skipped parking hydration because onboarding is incomplete');
       }
 
-      if (deviceData) setSavedBluetoothDeviceState(JSON.parse(deviceData));
-      if (autoDetectionData) setAutoDetectionEnabledState(JSON.parse(autoDetectionData));
+      if (deviceData) {
+        setSavedBluetoothDeviceState(
+          parseStoredValue(
+            deviceData,
+            (value): value is CarBluetoothDevice =>
+              typeof value === 'object' &&
+              value !== null &&
+              typeof (value as CarBluetoothDevice).id === 'string' &&
+              typeof (value as CarBluetoothDevice).name === 'string' &&
+              typeof (value as CarBluetoothDevice).address === 'string',
+            null,
+          ),
+        );
+      }
+      if (autoDetectionData) setAutoDetectionEnabledState(parseStoredValue(autoDetectionData, (value): value is boolean => typeof value === 'boolean', true));
       if (permissionAskedData) {
         setPermissionAskedState({
           ...DEFAULT_STARTUP_PERMISSION_ASKED_STATE,
-          ...JSON.parse(permissionAskedData),
+          ...parseStoredValue(
+            permissionAskedData,
+            (value): value is Partial<StartupPermissionAskedState> => typeof value === 'object' && value !== null,
+            {},
+          ),
         });
       }
-      if (favoritePlacesData) setFavoritePlaces(JSON.parse(favoritePlacesData));
-      if (offlineParkingZonesData) setOfflineParkingZones(JSON.parse(offlineParkingZonesData));
-      if (quickNavigationPresetsData) setQuickNavigationPresets(JSON.parse(quickNavigationPresetsData));
+      if (favoritePlacesData) {
+        setFavoritePlaces(
+          parseStoredValue(
+            favoritePlacesData,
+            (value): value is FavoritePlace[] =>
+              Array.isArray(value) && value.every((item) => typeof item === 'object' && item !== null && typeof (item as FavoritePlace).id === 'string'),
+            [],
+          ),
+        );
+      }
+      if (offlineParkingZonesData) {
+        setOfflineParkingZones(parseStoredValue(offlineParkingZonesData, (value): value is ParkingZone[] => Array.isArray(value) && value.every(isParkingZone), []));
+      }
+      if (quickNavigationPresetsData) {
+        setQuickNavigationPresets(
+          parseStoredValue(
+            quickNavigationPresetsData,
+            (value): value is QuickNavigationPreset[] => Array.isArray(value) && value.every(isQuickPreset),
+            [],
+          ),
+        );
+      }
     } catch (error) {
       console.error('Error loading saved data:', error);
     } finally {
@@ -557,6 +657,64 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     await AsyncStorage.setItem(STORAGE_KEYS.favoritePlaces, JSON.stringify(nextList));
   }, [favoritePlaces]);
 
+  const addOfflineParkingZone = useCallback(async (zone: Omit<ParkingZone, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const now = Date.now();
+    const nextZone: ParkingZone = {
+      ...zone,
+      id: `zone-${now}-${Math.random().toString(36).slice(2, 6)}`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const nextList = [nextZone, ...offlineParkingZones];
+    setOfflineParkingZones(nextList);
+    await AsyncStorage.setItem(STORAGE_KEYS.offlineParkingZones, JSON.stringify(nextList));
+    return nextZone;
+  }, [offlineParkingZones]);
+
+  const updateOfflineParkingZone = useCallback(async (zoneId: string, updates: Partial<Omit<ParkingZone, 'id' | 'createdAt'>>) => {
+    const nextList = offlineParkingZones.map((zone) => (zone.id === zoneId ? { ...zone, ...updates, updatedAt: Date.now() } : zone));
+    setOfflineParkingZones(nextList);
+    await AsyncStorage.setItem(STORAGE_KEYS.offlineParkingZones, JSON.stringify(nextList));
+  }, [offlineParkingZones]);
+
+  const removeOfflineParkingZone = useCallback(async (zoneId: string) => {
+    const nextList = offlineParkingZones.filter((zone) => zone.id !== zoneId);
+    setOfflineParkingZones(nextList);
+    await AsyncStorage.setItem(STORAGE_KEYS.offlineParkingZones, JSON.stringify(nextList));
+    setNavigationTarget((prev) => (prev?.kind === 'offline-zone' && prev.zoneId === zoneId ? null : prev));
+  }, [offlineParkingZones]);
+
+  const listOfflineParkingZones = useCallback(() => offlineParkingZones, [offlineParkingZones]);
+
+  const addQuickNavigationPreset = useCallback(async (preset: Omit<QuickNavigationPreset, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const now = Date.now();
+    const nextPreset: QuickNavigationPreset = {
+      ...preset,
+      id: `preset-${now}-${Math.random().toString(36).slice(2, 6)}`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const nextList = [nextPreset, ...quickNavigationPresets].slice(0, 30);
+    setQuickNavigationPresets(nextList);
+    await AsyncStorage.setItem(STORAGE_KEYS.quickNavigationPresets, JSON.stringify(nextList));
+    return nextPreset;
+  }, [quickNavigationPresets]);
+
+  const updateQuickNavigationPreset = useCallback(async (presetId: string, updates: Partial<Omit<QuickNavigationPreset, 'id' | 'createdAt'>>) => {
+    const nextList = quickNavigationPresets.map((preset) => (preset.id === presetId ? { ...preset, ...updates, updatedAt: Date.now() } : preset));
+    setQuickNavigationPresets(nextList);
+    await AsyncStorage.setItem(STORAGE_KEYS.quickNavigationPresets, JSON.stringify(nextList));
+  }, [quickNavigationPresets]);
+
+  const removeQuickNavigationPreset = useCallback(async (presetId: string) => {
+    const nextList = quickNavigationPresets.filter((preset) => preset.id !== presetId);
+    setQuickNavigationPresets(nextList);
+    await AsyncStorage.setItem(STORAGE_KEYS.quickNavigationPresets, JSON.stringify(nextList));
+    setNavigationTarget((prev) => (prev?.kind === 'quick-preset' && prev.presetId === presetId ? null : prev));
+  }, [quickNavigationPresets]);
+
+  const listQuickNavigationPresets = useCallback(() => quickNavigationPresets, [quickNavigationPresets]);
+
   const parkingStats = useMemo(() => calculateStats(), [calculateStats]);
 
   return useMemo(() => ({
@@ -588,8 +746,18 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     favoritePlaces,
     offlineParkingZones,
     quickNavigationPresets,
+    navigationTarget,
     addFavoritePlace,
     removeFavoritePlace,
+    addOfflineParkingZone,
+    updateOfflineParkingZone,
+    removeOfflineParkingZone,
+    listOfflineParkingZones,
+    addQuickNavigationPreset,
+    updateQuickNavigationPreset,
+    removeQuickNavigationPreset,
+    listQuickNavigationPresets,
+    setNavigationTarget,
   }), [
     currentParking,
     parkingHistory,
@@ -619,7 +787,17 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     favoritePlaces,
     offlineParkingZones,
     quickNavigationPresets,
+    navigationTarget,
     addFavoritePlace,
     removeFavoritePlace,
+    addOfflineParkingZone,
+    updateOfflineParkingZone,
+    removeOfflineParkingZone,
+    listOfflineParkingZones,
+    addQuickNavigationPreset,
+    updateQuickNavigationPreset,
+    removeQuickNavigationPreset,
+    listQuickNavigationPresets,
+    setNavigationTarget,
   ]);
 });

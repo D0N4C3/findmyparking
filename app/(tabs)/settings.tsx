@@ -33,7 +33,8 @@ import {
   Linking,
   Animated,
   Share,
-  AppState
+  AppState,
+  TextInput
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -134,12 +135,20 @@ export default function SettingsScreen() {
     permissionStatuses,
     refreshPermissionStatuses,
     requestNotificationAccess,
+    offlineParkingZones,
+    addOfflineParkingZone,
+    updateOfflineParkingZone,
+    removeOfflineParkingZone,
+    quickNavigationPresets,
+    removeQuickNavigationPreset,
+    setNavigationTarget,
   } = useParking();
   const { isDark, theme, setTheme } = useTheme();
   const { showDestructive, showError, showConfirm } = useDialog();
   const colors = isDark ? Colors.dark : Colors.light;
   
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [zoneName, setZoneName] = useState('');
   const [isBluetoothModalVisible, setIsBluetoothModalVisible] = useState(false);
   const [shouldShowSkippedPrompt, setShouldShowSkippedPrompt] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -276,6 +285,26 @@ export default function SettingsScreen() {
         return { text: colors.textMuted, background: colors.surfaceSecondary };
     }
   }, [colors]);
+
+  const handleImportZone = useCallback(async () => {
+    if (!zoneName.trim()) return;
+    const baseLatitude = 37.7749 + Math.random() * 0.01;
+    const baseLongitude = -122.4194 + Math.random() * 0.01;
+    await addOfflineParkingZone({
+      name: zoneName.trim(),
+      polygon: [
+        { latitude: baseLatitude, longitude: baseLongitude },
+        { latitude: baseLatitude + 0.0015, longitude: baseLongitude },
+        { latitude: baseLatitude + 0.0015, longitude: baseLongitude + 0.0015 },
+        { latitude: baseLatitude, longitude: baseLongitude + 0.0015 },
+      ],
+      center: { latitude: baseLatitude + 0.00075, longitude: baseLongitude + 0.00075 },
+      zoneType: 'garage',
+      cacheStatus: 'cached',
+      source: 'imported',
+    });
+    setZoneName('');
+  }, [addOfflineParkingZone, zoneName]);
 
   const locationStatus: PermissionBadgeStatus = permissionStatuses.location.foreground;
 
@@ -515,6 +544,68 @@ export default function SettingsScreen() {
             />
           </View>
 
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>OFFLINE PARKING ZONES</Text>
+            <AppCard colors={colors} elevated="none" style={styles.zoneComposer}>
+              <TextInput
+                value={zoneName}
+                onChangeText={setZoneName}
+                placeholder="Zone name (e.g., Downtown Garage)"
+                placeholderTextColor={colors.textMuted}
+                style={[styles.zoneInput, { color: colors.text, borderColor: colors.border }]}
+              />
+              <TouchableOpacity style={[styles.zoneActionButton, { backgroundColor: colors.accent }]} onPress={() => void handleImportZone()}>
+                <Text style={[styles.zoneActionLabel, { color: colors.textOnAccent }]}>Import + Cache</Text>
+              </TouchableOpacity>
+            </AppCard>
+            {offlineParkingZones.map((zone) => (
+              <AppCard key={zone.id} colors={colors} elevated="none" style={styles.zoneRow}>
+                <View style={styles.zoneRowMain}>
+                  <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>{zone.name}</Text>
+                  <Text style={[styles.itemSubtitle, { color: colors.textMuted }]}>Cache: {zone.cacheStatus}</Text>
+                </View>
+                <View style={styles.zoneActions}>
+                  <TouchableOpacity onPress={() => void updateOfflineParkingZone(zone.id, { cacheStatus: zone.cacheStatus === 'cached' ? 'stale' : 'cached' })}>
+                    <Text style={[styles.zoneLink, { color: colors.accent }]}>{zone.cacheStatus === 'cached' ? 'Mark stale' : 'Mark cached'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => void removeOfflineParkingZone(zone.id)}>
+                    <Text style={[styles.zoneLink, { color: colors.error }]}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              </AppCard>
+            ))}
+          </View>
+
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>QUICK PRESETS</Text>
+            {quickNavigationPresets.map((preset) => (
+              <AppCard key={preset.id} colors={colors} elevated="none" style={styles.zoneRow}>
+                <View style={styles.zoneRowMain}>
+                  <Text style={[styles.itemTitle, { color: colors.text }]}>{preset.label}</Text>
+                  <Text style={[styles.itemSubtitle, { color: colors.textMuted }]}>Mode: {preset.mode}</Text>
+                </View>
+                <View style={styles.zoneActions}>
+                  <TouchableOpacity
+                    onPress={() =>
+                      setNavigationTarget({
+                        kind: 'quick-preset',
+                        presetId: preset.id,
+                        latitude: preset.destination.latitude,
+                        longitude: preset.destination.longitude,
+                        label: preset.label,
+                      })
+                    }
+                  >
+                    <Text style={[styles.zoneLink, { color: colors.accent }]}>Use on map</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => void removeQuickNavigationPreset(preset.id)}>
+                    <Text style={[styles.zoneLink, { color: colors.error }]}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              </AppCard>
+            ))}
+          </View>
+
           {/* Data Management Section */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>DATA MANAGEMENT</Text>
@@ -658,6 +749,47 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginLeft: 4,
     textTransform: 'uppercase',
+  },
+  zoneComposer: {
+    padding: 12,
+    borderRadius: 14,
+    gap: 10,
+  },
+  zoneInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+  },
+  zoneActionButton: {
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  zoneActionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  zoneRow: {
+    marginTop: 8,
+    borderRadius: 14,
+    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  zoneRowMain: {
+    flex: 1,
+  },
+  zoneActions: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  zoneLink: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   themeSelector: {
     padding: 16,
