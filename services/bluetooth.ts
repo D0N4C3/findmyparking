@@ -28,7 +28,20 @@ export interface BluetoothScanResult {
   message?: string;
 }
 
+export type BluetoothConnectionStatus =
+  | 'connected'
+  | 'disconnected'
+  | 'failed'
+  | 'permission-denied'
+  | 'unsupported';
+
+export interface BluetoothConnectionResult {
+  status: BluetoothConnectionStatus;
+  message?: string;
+}
+
 const DEFAULT_TIMEOUT_MS = 10_000;
+const DEFAULT_CONNECTION_TIMEOUT_MS = 8_000;
 const bleManager = new BleManager();
 
 const normalizeDevice = (device: Device): BluetoothDevice => {
@@ -144,7 +157,7 @@ export const scanBluetoothDevices = async (
       resolve(result);
     };
 
-    bleManager.startDeviceScan(null, null, (error, scannedDevice) => {
+    bleManager.startDeviceScan(null, { allowDuplicates: false, scanMode: 2 }, (error, scannedDevice) => {
       if (error) {
         if (error.errorCode === BleErrorCode.BluetoothUnauthorized) {
           finish({
@@ -173,7 +186,11 @@ export const scanBluetoothDevices = async (
     });
 
     setTimeout(() => {
-      const normalizedDevices = Array.from(devices.values());
+      const normalizedDevices = Array.from(devices.values()).sort((a, b) => {
+        if (a.name === 'Unknown device' && b.name !== 'Unknown device') return 1;
+        if (a.name !== 'Unknown device' && b.name === 'Unknown device') return -1;
+        return a.name.localeCompare(b.name);
+      });
 
       if (normalizedDevices.length > 0) {
         finish({
@@ -192,4 +209,55 @@ export const scanBluetoothDevices = async (
       });
     }, timeoutMs);
   });
+};
+
+export const verifyBluetoothDeviceConnection = async (
+  deviceId: string,
+  timeoutMs = DEFAULT_CONNECTION_TIMEOUT_MS,
+): Promise<BluetoothConnectionResult> => {
+  const permissionResult = await requestBluetoothPermissions();
+  if (permissionResult.status !== 'granted') {
+    return {
+      status: permissionResult.status === 'unsupported' ? 'unsupported' : 'permission-denied',
+      message: permissionResult.message,
+    };
+  }
+
+  const bluetoothEnabled = await waitForBluetoothPoweredOn();
+  if (!bluetoothEnabled) {
+    return {
+      status: 'failed',
+      message: 'Bluetooth is turned off. Please enable it and try again.',
+    };
+  }
+
+  try {
+    const timeout = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('connection-timeout')), timeoutMs);
+    });
+
+    const connectAttempt = (async () => {
+      const device = await bleManager.connectToDevice(deviceId, { timeout: timeoutMs, autoConnect: false });
+      await device.discoverAllServicesAndCharacteristics();
+      return device;
+    })();
+
+    const connectedDevice = await Promise.race([connectAttempt, timeout]);
+
+    await connectedDevice.cancelConnection();
+    return { status: 'connected', message: 'Device reachable and ready for auto-detection.' };
+  } catch (error) {
+    const bleErrorCode = (error as { errorCode?: BleErrorCode })?.errorCode;
+    if (bleErrorCode === BleErrorCode.BluetoothUnauthorized) {
+      return {
+        status: 'permission-denied',
+        message: 'Bluetooth permissions are required to validate this device.',
+      };
+    }
+
+    return {
+      status: 'failed',
+      message: 'Could not connect to this device. Make sure it is powered on and nearby.',
+    };
+  }
 };

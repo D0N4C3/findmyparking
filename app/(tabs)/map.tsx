@@ -8,13 +8,11 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   Platform,
   Linking,
   Share,
   ActivityIndicator,
-  Animated,
-  PanResponder,
-  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -34,6 +32,9 @@ import {
   LocateFixed,
   Timer,
   XCircle,
+  Pin,
+  EyeOff,
+  Eye,
 } from 'lucide-react-native';
 
 type RouteStep = {
@@ -123,12 +124,13 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const mapRef = useRef<MapView>(null);
-  const { height } = useWindowDimensions();
-
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
   const [navigationSteps, setNavigationSteps] = useState<RouteStep[]>([]);
   const [routeCoordinates, setRouteCoordinates] = useState<Coordinates[]>([]);
+  const [manualPin, setManualPin] = useState<Coordinates | null>(null);
+  const [isPinDropMode, setIsPinDropMode] = useState(false);
+  const [isSheetHidden, setIsSheetHidden] = useState(false);
 
   const distance = getDistanceToCar();
   const walkingTime = getWalkingTimeToCar();
@@ -216,8 +218,17 @@ export default function MapScreen() {
     };
   }, []);
 
+  const navigationTarget = useMemo(
+    () =>
+      manualPin ??
+      (currentParking
+        ? { latitude: currentParking.latitude, longitude: currentParking.longitude }
+        : null),
+    [currentParking, manualPin],
+  );
+
   const buildNavigation = useCallback(async () => {
-    if (!currentParking) {
+    if (!navigationTarget) {
       showError(DIALOG_COPY.prompts.noParkingSaved.title, DIALOG_COPY.prompts.noParkingSaved.message);
       return;
     }
@@ -231,8 +242,8 @@ export default function MapScreen() {
 
     try {
       const next = await fetchRoute(currentLocation, {
-        latitude: currentParking.latitude,
-        longitude: currentParking.longitude,
+        latitude: navigationTarget.latitude,
+        longitude: navigationTarget.longitude,
       });
 
       setRouteCoordinates(next.coordinates);
@@ -244,7 +255,7 @@ export default function MapScreen() {
     } catch (error) {
       setRouteCoordinates([
         { latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude },
-        { latitude: currentParking.latitude, longitude: currentParking.longitude },
+        { latitude: navigationTarget.latitude, longitude: navigationTarget.longitude },
       ]);
       setNavigationSteps([{ instruction: 'Continue straight to your parked car', distance: Math.max(1, Math.round(getDistanceToCar() ?? 0)) }]);
       showError('Live routing unavailable', 'Using direct guidance line right now.');
@@ -252,11 +263,11 @@ export default function MapScreen() {
     } finally {
       setIsLoadingRoute(false);
     }
-  }, [currentParking, currentLocation, fetchRoute, getDistanceToCar, showError]);
+  }, [navigationTarget, currentLocation, fetchRoute, getDistanceToCar, showError]);
 
   const openExternalMaps = useCallback(() => {
-    const target = currentParking
-      ? { latitude: currentParking.latitude, longitude: currentParking.longitude, label: 'Parked Car' }
+    const target = navigationTarget
+      ? { latitude: navigationTarget.latitude, longitude: navigationTarget.longitude, label: manualPin ? 'Manual Pin' : 'Parked Car' }
       : currentLocation
         ? { latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude, label: 'Current Location' }
         : null;
@@ -267,9 +278,9 @@ export default function MapScreen() {
     }
 
     const mapsUrl = Platform.select({
-      ios: `http://maps.apple.com/?ll=${target.latitude},${target.longitude}&q=${encodeURIComponent(target.label)}`,
-      android: `geo:${target.latitude},${target.longitude}?q=${target.latitude},${target.longitude}(${encodeURIComponent(target.label)})`,
-      default: `https://maps.google.com/?q=${target.latitude},${target.longitude}`,
+      ios: `http://maps.apple.com/?dirflg=w&daddr=${target.latitude},${target.longitude}&q=${encodeURIComponent(target.label)}`,
+      android: `google.navigation:q=${target.latitude},${target.longitude}&mode=w`,
+      default: `https://maps.google.com/?daddr=${target.latitude},${target.longitude}&travelmode=walking`,
     });
 
     if (!mapsUrl) return;
@@ -277,7 +288,7 @@ export default function MapScreen() {
     void Linking.openURL(mapsUrl).catch(() => {
       showError('Unable to open maps', 'Please try again.');
     });
-  }, [currentLocation, currentParking, showError]);
+  }, [currentLocation, manualPin, navigationTarget, showError]);
 
   const shareParking = useCallback(async () => {
     if (!currentParking) {
@@ -313,62 +324,6 @@ export default function MapScreen() {
 
   const firstStep = navigationSteps[0];
 
-  const collapsedY = Math.max(height * 0.63, 380);
-  const midY = Math.max(height * 0.42, 235);
-  const expandedY = Math.max(insets.top + 86, 96);
-  const sheetY = useRef(new Animated.Value(midY)).current;
-  const dragStartY = useRef(midY);
-
-  const snapTo = useCallback(
-    (nextY: number) => {
-      Animated.spring(sheetY, {
-        toValue: nextY,
-        useNativeDriver: true,
-        damping: 22,
-        stiffness: 180,
-      }).start();
-    },
-    [sheetY],
-  );
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 6,
-        onPanResponderGrant: () => {
-          sheetY.stopAnimation((value) => {
-            dragStartY.current = value;
-          });
-        },
-        onPanResponderMove: (_, gestureState) => {
-          const next = dragStartY.current + gestureState.dy;
-          const clamped = Math.max(expandedY, Math.min(collapsedY, next));
-          sheetY.setValue(clamped);
-        },
-        onPanResponderRelease: (_, gestureState) => {
-          const end = dragStartY.current + gestureState.dy;
-          const candidates = [expandedY, midY, collapsedY];
-          const nearest = candidates.reduce((prev, current) =>
-            Math.abs(current - end) < Math.abs(prev - end) ? current : prev,
-          );
-
-          if (gestureState.vy < -0.9) {
-            snapTo(expandedY);
-            return;
-          }
-
-          if (gestureState.vy > 0.9) {
-            snapTo(collapsedY);
-            return;
-          }
-
-          snapTo(nearest);
-        },
-      }),
-    [collapsedY, expandedY, midY, sheetY, snapTo],
-  );
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <MapView
@@ -380,6 +335,13 @@ export default function MapScreen() {
         showsUserLocation={Platform.OS !== 'web'}
         showsMyLocationButton={false}
         toolbarEnabled={false}
+        onPress={(event) => {
+          if (!isPinDropMode) return;
+          const coordinate = event.nativeEvent.coordinate;
+          setManualPin({ latitude: coordinate.latitude, longitude: coordinate.longitude });
+          setIsPinDropMode(false);
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }}
       >
         {currentParking && (
           <Marker coordinate={{ latitude: currentParking.latitude, longitude: currentParking.longitude }} title="Your car" description="Saved parking location">
@@ -398,13 +360,21 @@ export default function MapScreen() {
             lineJoin="round"
           />
         )}
+
+        {manualPin && (
+          <Marker coordinate={manualPin} title="Manual pin" description="Custom navigation target">
+            <View style={[styles.manualPin, { backgroundColor: colors.warning }]}>
+              <Pin size={14} color="#fff" />
+            </View>
+          </Marker>
+        )}
       </MapView>
 
       <View style={[styles.mapOverlay, { paddingTop: insets.top + 8 }]}>
         <View style={styles.headerRow}>
           <View>
             <Text style={[styles.title, { color: '#fff' }]}>Navigate to car</Text>
-            <Text style={[styles.subtitle, { color: 'rgba(255,255,255,0.82)' }]}>Full map + draggable controls</Text>
+            <Text style={[styles.subtitle, { color: 'rgba(255,255,255,0.82)' }]}>Premium walk-first guidance</Text>
           </View>
 
           <TouchableOpacity style={styles.iconAction} onPress={() => void shareParking()}>
@@ -422,6 +392,12 @@ export default function MapScreen() {
           <TouchableOpacity style={styles.fab} onPress={focusCar} disabled={!currentParking}>
             <Car size={20} color={currentParking ? '#fff' : 'rgba(255,255,255,0.45)'} />
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.fab, isPinDropMode ? styles.fabActive : null]}
+            onPress={() => setIsPinDropMode((prev) => !prev)}
+          >
+            <Pin size={20} color="#fff" />
+          </TouchableOpacity>
         </View>
 
         {needsMapSetup && (
@@ -434,20 +410,29 @@ export default function MapScreen() {
         )}
       </View>
 
-      <Animated.View
-        style={[
-          styles.bottomSheet,
-          {
-            backgroundColor: colors.card,
-            borderTopColor: colors.border,
-            paddingBottom: tabBarHeight + Math.max(insets.bottom, 12),
-            transform: [{ translateY: sheetY }],
-          },
-        ]}
-      >
-        <View style={styles.dragHandleWrap} {...panResponder.panHandlers}>
-          <View style={[styles.dragHandle, { backgroundColor: colors.textMuted }]} />
-        </View>
+      <View pointerEvents={isSheetHidden ? 'box-none' : 'auto'} style={styles.sheetContainer}>
+        <Pressable
+          style={[styles.sheetToggle, { backgroundColor: colors.card, bottom: tabBarHeight + Math.max(insets.bottom, 10) }]}
+          onPress={() => setIsSheetHidden((prev) => !prev)}
+        >
+          {isSheetHidden ? <Eye size={16} color={colors.text} /> : <EyeOff size={16} color={colors.text} />}
+          <Text style={[styles.sheetToggleLabel, { color: colors.text }]}>{isSheetHidden ? 'Show controls' : 'Hide controls'}</Text>
+        </Pressable>
+
+        {!isSheetHidden && (
+          <View
+            style={[
+              styles.bottomSheet,
+              {
+                backgroundColor: colors.card,
+                borderTopColor: colors.border,
+                paddingBottom: tabBarHeight + Math.max(insets.bottom, 12),
+              },
+            ]}
+          >
+            <View style={styles.dragHandleWrap}>
+              <View style={[styles.dragHandle, { backgroundColor: colors.textMuted }]} />
+            </View>
 
         <View style={styles.metricsRow}>
           <View style={[styles.metricCard, { backgroundColor: colors.surfaceSecondary }]}>
@@ -485,13 +470,13 @@ export default function MapScreen() {
             <Text style={[styles.secondaryActionLabel, { color: colors.text }]}>Open Maps</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.primaryAction, { backgroundColor: colors.accent }]} onPress={() => void buildNavigation()} disabled={isLoadingRoute || !currentParking}>
+          <TouchableOpacity style={[styles.primaryAction, { backgroundColor: colors.accent }]} onPress={() => void buildNavigation()} disabled={isLoadingRoute || !navigationTarget}>
             {isLoadingRoute ? (
               <ActivityIndicator size="small" color={colors.textOnAccent} />
             ) : (
               <Route size={18} color={colors.textOnAccent} />
             )}
-            <Text style={[styles.primaryActionLabel, { color: colors.textOnAccent }]}>{isLoadingRoute ? 'Building...' : 'Build Route'}</Text>
+            <Text style={[styles.primaryActionLabel, { color: colors.textOnAccent }]}>{isLoadingRoute ? 'Building...' : 'Start Walk Route'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -503,7 +488,9 @@ export default function MapScreen() {
           <XCircle size={17} color={currentParking ? colors.error : colors.textMuted} />
           <Text style={[styles.endSessionLabel, { color: currentParking ? colors.error : colors.textMuted }]}>End Session</Text>
         </TouchableOpacity>
-      </Animated.View>
+          </View>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -556,10 +543,22 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 6,
   },
+  fabActive: {
+    backgroundColor: 'rgba(59,130,246,0.65)',
+  },
   carPin: {
     width: 28,
     height: 28,
     borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderColor: '#fff',
+    borderWidth: 2,
+  },
+  manualPin: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
     borderColor: '#fff',
@@ -583,18 +582,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
   },
+  sheetContainer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    pointerEvents: 'box-none',
+  },
+  sheetToggle: {
+    alignSelf: 'center',
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  sheetToggleLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   bottomSheet: {
     position: 'absolute',
     left: 0,
     right: 0,
-    top: 0,
+    bottom: 0,
     borderTopWidth: 1,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 16,
     paddingTop: 8,
     gap: 12,
-    minHeight: 320,
+    minHeight: 300,
+    maxHeight: '56%',
   },
   dragHandleWrap: {
     alignItems: 'center',

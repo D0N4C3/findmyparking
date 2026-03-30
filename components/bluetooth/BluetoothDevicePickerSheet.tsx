@@ -10,7 +10,12 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BluetoothScanResult, scanBluetoothDevices } from '@/services/bluetooth';
+import {
+  BluetoothConnectionResult,
+  BluetoothScanResult,
+  scanBluetoothDevices,
+  verifyBluetoothDeviceConnection,
+} from '@/services/bluetooth';
 import { CarBluetoothDevice } from '@/context/ParkingContext';
 
 interface BluetoothDevicePickerSheetProps {
@@ -48,10 +53,13 @@ export function BluetoothDevicePickerSheet({
   const [isScanningBluetooth, setIsScanningBluetooth] = useState(false);
   const [scanResult, setScanResult] = useState<BluetoothScanResult | null>(null);
   const [pendingDevice, setPendingDevice] = useState<CarBluetoothDevice | null>(null);
+  const [connectionResult, setConnectionResult] = useState<BluetoothConnectionResult | null>(null);
+  const [isValidatingConnection, setIsValidatingConnection] = useState(false);
 
   const runBluetoothScan = useCallback(async () => {
     setIsScanningBluetooth(true);
     setScanResult(null);
+    setConnectionResult(null);
 
     const result = await scanBluetoothDevices({ timeoutMs: 10_000, retries: 1 });
     setScanResult(result);
@@ -70,6 +78,19 @@ export function BluetoothDevicePickerSheet({
   );
 
   const scannedDevices = useMemo(() => scanResult?.devices ?? [], [scanResult?.devices]);
+
+  const confirmDevice = useCallback(async () => {
+    if (!pendingDevice) return;
+
+    setIsValidatingConnection(true);
+    const result = await verifyBluetoothDeviceConnection(pendingDevice.id);
+    setConnectionResult(result);
+    setIsValidatingConnection(false);
+
+    if (result.status === 'connected') {
+      onConfirmDevice(pendingDevice);
+    }
+  }, [onConfirmDevice, pendingDevice]);
 
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
@@ -131,6 +152,29 @@ export function BluetoothDevicePickerSheet({
             })}
           </ScrollView>
 
+          {connectionResult ? (
+            <View
+              style={[
+                styles.scanStateContainer,
+                {
+                  backgroundColor:
+                    connectionResult.status === 'connected' ? colors.success + '15' : colors.error + '10',
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.scanStateErrorText,
+                  {
+                    color: connectionResult.status === 'connected' ? colors.success : colors.error,
+                  },
+                ]}
+              >
+                {connectionResult.message}
+              </Text>
+            </View>
+          ) : null}
+
           <View style={styles.sheetActions}>
             <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.surfaceSecondary }]} onPress={() => void runBluetoothScan()}>
               <Text style={[styles.actionButtonText, { color: colors.text }]}>Scan Again</Text>
@@ -138,10 +182,14 @@ export function BluetoothDevicePickerSheet({
 
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: pendingDevice ? colors.accent : colors.surfaceSecondary }]}
-              onPress={() => pendingDevice && onConfirmDevice(pendingDevice)}
-              disabled={!pendingDevice}
+              onPress={() => void confirmDevice()}
+              disabled={!pendingDevice || isValidatingConnection}
             >
-              <Text style={[styles.actionButtonText, { color: pendingDevice ? '#fff' : colors.textMuted }]}>Confirm Device</Text>
+              {isValidatingConnection ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={[styles.actionButtonText, { color: pendingDevice ? '#fff' : colors.textMuted }]}>Confirm Device</Text>
+              )}
             </TouchableOpacity>
           </View>
 

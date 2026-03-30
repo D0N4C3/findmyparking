@@ -13,6 +13,7 @@ import {
 import { getOnboardingState } from '@/services/onboarding';
 import { useDialog } from '@/context/DialogContext';
 import { DIALOG_COPY } from '@/constants/dialogs';
+import { FavoritePlace, ParkingZone, QuickNavigationPreset } from '@/types/parking';
 
 export interface ParkingSpot {
   id: string;
@@ -69,6 +70,11 @@ interface ParkingContextType {
   permissionStatuses: PermissionStatuses;
   refreshPermissionStatuses: () => Promise<void>;
   requestNotificationAccess: () => Promise<boolean>;
+  favoritePlaces: FavoritePlace[];
+  offlineParkingZones: ParkingZone[];
+  quickNavigationPresets: QuickNavigationPreset[];
+  addFavoritePlace: (favorite: Omit<FavoritePlace, 'id' | 'createdAt'>) => Promise<void>;
+  removeFavoritePlace: (favoriteId: string) => Promise<void>;
 }
 
 const STORAGE_KEYS = {
@@ -78,6 +84,9 @@ const STORAGE_KEYS = {
   autoDetection: '@parkping/auto_detection',
   parkingStats: '@parkping/parking_stats',
   permissionAsked: '@parkping/permission_asked',
+  favoritePlaces: '@parkping/favorite_places',
+  offlineParkingZones: '@parkping/offline_parking_zones',
+  quickNavigationPresets: '@parkping/quick_nav_presets',
 };
 
 function createParkingSpotId() {
@@ -103,6 +112,9 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     DEFAULT_STARTUP_PERMISSION_ASKED_STATE
   );
   const [hasInitializedStartupPermissions, setHasInitializedStartupPermissions] = useState(false);
+  const [favoritePlaces, setFavoritePlaces] = useState<FavoritePlace[]>([]);
+  const [offlineParkingZones, setOfflineParkingZones] = useState<ParkingZone[]>([]);
+  const [quickNavigationPresets, setQuickNavigationPresets] = useState<QuickNavigationPreset[]>([]);
 
   useEffect(() => {
     void loadSavedData();
@@ -164,12 +176,24 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     try {
       const onboardingState = await getOnboardingState();
 
-      const [parkingData, historyData, deviceData, autoDetectionData, permissionAskedData] = await Promise.all([
+      const [
+        parkingData,
+        historyData,
+        deviceData,
+        autoDetectionData,
+        permissionAskedData,
+        favoritePlacesData,
+        offlineParkingZonesData,
+        quickNavigationPresetsData,
+      ] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.currentParking),
         AsyncStorage.getItem(STORAGE_KEYS.parkingHistory),
         AsyncStorage.getItem(STORAGE_KEYS.bluetoothDevice),
         AsyncStorage.getItem(STORAGE_KEYS.autoDetection),
         AsyncStorage.getItem(STORAGE_KEYS.permissionAsked),
+        AsyncStorage.getItem(STORAGE_KEYS.favoritePlaces),
+        AsyncStorage.getItem(STORAGE_KEYS.offlineParkingZones),
+        AsyncStorage.getItem(STORAGE_KEYS.quickNavigationPresets),
       ]);
 
       if (onboardingState.completed) {
@@ -191,6 +215,9 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
           ...JSON.parse(permissionAskedData),
         });
       }
+      if (favoritePlacesData) setFavoritePlaces(JSON.parse(favoritePlacesData));
+      if (offlineParkingZonesData) setOfflineParkingZones(JSON.parse(offlineParkingZonesData));
+      if (quickNavigationPresetsData) setQuickNavigationPresets(JSON.parse(quickNavigationPresetsData));
     } catch (error) {
       console.error('Error loading saved data:', error);
     } finally {
@@ -512,6 +539,24 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     return Math.ceil(distance / walkingSpeed / 60);
   }, [getDistanceToCar]);
 
+  const addFavoritePlace = useCallback(async (favorite: Omit<FavoritePlace, 'id' | 'createdAt'>) => {
+    const nextFavorite: FavoritePlace = {
+      ...favorite,
+      id: `fav-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      createdAt: Date.now(),
+    };
+
+    const nextList = [nextFavorite, ...favoritePlaces].slice(0, 20);
+    setFavoritePlaces(nextList);
+    await AsyncStorage.setItem(STORAGE_KEYS.favoritePlaces, JSON.stringify(nextList));
+  }, [favoritePlaces]);
+
+  const removeFavoritePlace = useCallback(async (favoriteId: string) => {
+    const nextList = favoritePlaces.filter((favorite) => favorite.id !== favoriteId);
+    setFavoritePlaces(nextList);
+    await AsyncStorage.setItem(STORAGE_KEYS.favoritePlaces, JSON.stringify(nextList));
+  }, [favoritePlaces]);
+
   const parkingStats = useMemo(() => calculateStats(), [calculateStats]);
 
   return useMemo(() => ({
@@ -540,6 +585,11 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     permissionStatuses,
     refreshPermissionStatuses,
     requestNotificationAccess,
+    favoritePlaces,
+    offlineParkingZones,
+    quickNavigationPresets,
+    addFavoritePlace,
+    removeFavoritePlace,
   }), [
     currentParking,
     parkingHistory,
@@ -566,5 +616,10 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     permissionStatuses,
     refreshPermissionStatuses,
     requestNotificationAccess,
+    favoritePlaces,
+    offlineParkingZones,
+    quickNavigationPresets,
+    addFavoritePlace,
+    removeFavoritePlace,
   ]);
 });
