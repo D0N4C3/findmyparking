@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -61,16 +61,30 @@ export function BluetoothDevicePickerSheet({
   const [prioritizePaired, setPrioritizePaired] = useState(true);
   const [prioritizeSignal, setPrioritizeSignal] = useState(true);
   const [showUnknownDevices, setShowUnknownDevices] = useState(false);
+  const connectionBannerShownAtRef = useRef<number | null>(null);
+
+  const setConnectionResultWithMinimumVisibility = useCallback(async (nextResult: BluetoothConnectionResult | null) => {
+    const shownAt = connectionBannerShownAtRef.current;
+    if (shownAt) {
+      const elapsed = Date.now() - shownAt;
+      if (elapsed < 1_500) {
+        await new Promise((resolve) => setTimeout(resolve, 1_500 - elapsed));
+      }
+    }
+
+    setConnectionResult(nextResult);
+    connectionBannerShownAtRef.current = nextResult ? Date.now() : null;
+  }, []);
 
   const runBluetoothScan = useCallback(async () => {
     setIsScanningBluetooth(true);
     setScanResult(null);
-    setConnectionResult(null);
+    await setConnectionResultWithMinimumVisibility(null);
 
     const result = await scanBluetoothDevices({ timeoutMs: scanDurationMs, retries: 2 });
     setScanResult(result);
     setIsScanningBluetooth(false);
-  }, [scanDurationMs]);
+  }, [scanDurationMs, setConnectionResultWithMinimumVisibility]);
 
   useEffect(() => {
     if (!visible) return;
@@ -124,13 +138,13 @@ export function BluetoothDevicePickerSheet({
 
     setIsValidatingConnection(true);
     const result = await verifyBluetoothDeviceConnection(pendingDevice.id);
-    setConnectionResult(result);
+    await setConnectionResultWithMinimumVisibility(result);
     setIsValidatingConnection(false);
 
-    if (result.status === 'connected') {
+    if (result.status === 'validated_reachable' || result.status === 'active_connected') {
       onConfirmDevice(pendingDevice);
     }
-  }, [onConfirmDevice, pendingDevice]);
+  }, [onConfirmDevice, pendingDevice, setConnectionResultWithMinimumVisibility]);
 
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
@@ -248,7 +262,9 @@ export function BluetoothDevicePickerSheet({
                 styles.scanStateContainer,
                 {
                   backgroundColor:
-                    connectionResult.status === 'connected' ? colors.success + '15' : colors.error + '10',
+                    connectionResult.status === 'validated_reachable' || connectionResult.status === 'active_connected'
+                      ? colors.success + '15'
+                      : colors.error + '10',
                 },
               ]}
             >
@@ -256,7 +272,10 @@ export function BluetoothDevicePickerSheet({
                 style={[
                   styles.scanStateErrorText,
                   {
-                    color: connectionResult.status === 'connected' ? colors.success : colors.error,
+                    color:
+                      connectionResult.status === 'validated_reachable' || connectionResult.status === 'active_connected'
+                        ? colors.success
+                        : colors.error,
                   },
                 ]}
               >

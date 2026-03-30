@@ -1,5 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
-import { BleErrorCode, BleManager, Device, State } from 'react-native-ble-plx';
+import { BleErrorCode, BleManager, Device, State, Subscription } from 'react-native-ble-plx';
 
 export interface BluetoothDevice {
   id: string;
@@ -32,7 +33,8 @@ export interface BluetoothScanResult {
 }
 
 export type BluetoothConnectionStatus =
-  | 'connected'
+  | 'validated_reachable'
+  | 'active_connected'
   | 'disconnected'
   | 'failed'
   | 'permission-denied'
@@ -43,9 +45,24 @@ export interface BluetoothConnectionResult {
   message?: string;
 }
 
+export type BluetoothMonitorStatus = 'inactive' | 'starting' | 'monitoring' | 'disconnected' | 'error';
+
+export interface BluetoothMonitorRuntime {
+  status: BluetoothMonitorStatus;
+  selectedDeviceId: string | null;
+  isSubscribedToDisconnect: boolean;
+  lastHeartbeatAt: number | null;
+  updatedAt: number;
+  message?: string;
+}
+
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_CONNECTION_TIMEOUT_MS = 8_000;
 const DEFAULT_SCAN_RETRIES = 1;
+const DEFAULT_MONITOR_HEARTBEAT_MS = 20_000;
+const STORAGE_KEYS = {
+  lastHeartbeatAt: '@parkping/bluetooth_monitor_last_heartbeat_at',
+};
 const bleManager = new BleManager();
 
 const normalizeDevice = (device: Device): BluetoothDevice => {
@@ -215,6 +232,73 @@ const getAndroidPermissions = () => {
   ];
 };
 
+let monitorState: BluetoothMonitorRuntime = {
+  status: 'inactive',
+  selectedDeviceId: null,
+  isSubscribedToDisconnect: false,
+  lastHeartbeatAt: null,
+  updatedAt: Date.now(),
+};
+let hasLoadedPersistedHeartbeat = false;
+let disconnectSubscription: Subscription | null = null;
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+const monitorListeners = new Set<(runtime: BluetoothMonitorRuntime) => void>();
+
+const notifyMonitorListeners = () => {
+  monitorListeners.forEach((listener) => listener(monitorState));
+};
+
+const setMonitorState = (next: Partial<BluetoothMonitorRuntime>) => {
+  monitorState = {
+    ...monitorState,
+    ...next,
+    updatedAt: Date.now(),
+  };
+  notifyMonitorListeners();
+};
+
+const updateLastHeartbeat = async (timestamp: number) => {
+  setMonitorState({ lastHeartbeatAt: timestamp });
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.lastHeartbeatAt, String(timestamp));
+  } catch {
+    // noop
+  }
+};
+
+const loadPersistedHeartbeatIfNeeded = async () => {
+  if (hasLoadedPersistedHeartbeat) {
+    return;
+  }
+
+  hasLoadedPersistedHeartbeat = true;
+  try {
+    const stored = await AsyncStorage.getItem(STORAGE_KEYS.lastHeartbeatAt);
+    const parsed = stored ? Number(stored) : Number.NaN;
+    if (Number.isFinite(parsed) && parsed > 0) {
+      setMonitorState({ lastHeartbeatAt: parsed });
+    }
+  } catch {
+    // noop
+  }
+};
+
+const stopHeartbeatTimer = () => {
+  if (!heartbeatTimer) {
+    return;
+  }
+  clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
+};
+
+const stopDisconnectSubscription = () => {
+  if (!disconnectSubscription) {
+    return;
+  }
+  disconnectSubscription.remove();
+  disconnectSubscription = null;
+};
+
 export const requestBluetoothPermissions = async (): Promise<BluetoothPermissionResult> => {
   if (Platform.OS === 'android') {
     const permissions = getAndroidPermissions();
@@ -367,7 +451,10 @@ export const verifyBluetoothDeviceConnection = async (
     const connectedDevice = await Promise.race([connectAttempt, timeout]);
 
     await connectedDevice.cancelConnection();
-    return { status: 'connected', message: 'Device reachable and ready for auto-detection.' };
+    return {
+      status: 'validated_reachable',
+      message: 'Device validated as reachable. Monitoring uses a separate active connection lifecycle.',
+    };
   } catch (error) {
     const bleErrorCode = (error as { errorCode?: BleErrorCode })?.errorCode;
     if (bleErrorCode === BleErrorCode.BluetoothUnauthorized) {
@@ -382,4 +469,87 @@ export const verifyBluetoothDeviceConnection = async (
       message: 'Could not connect to this device. Make sure it is powered on and nearby.',
     };
   }
+};
+
+export const subscribeToBluetoothMonitorRuntime = (
+  listener: (runtime: BluetoothMonitorRuntime) => void,
+): (() => void) => {
+  monitorListeners.add(listener);
+  void loadPersistedHeartbeatIfNeeded().then(() => {
+    listener(monitorState);
+  });
+  listener(monitorState);
+
+  return () => {
+    monitorListeners.delete(listener);
+  };
+};
+
+export const getBluetoothMonitorRuntime = async (): Promise<BluetoothMonitorRuntime> => {
+  await loadPersistedHeartbeatIfNeeded();
+  return monitorState;
+};
+
+export const stopBluetoothAutoDetectionMonitor = () => {
+  stopDisconnectSubscription();
+  stopHeartbeatTimer();
+  setMonitorState({
+    status: 'inactive',
+    selectedDeviceId: null,
+    isSubscribedToDisconnect: false,
+    message: 'Auto-detection monitor is idle.',
+  });
+};
+
+export const startBluetoothAutoDetectionMonitor = async (deviceId: string): Promise<BluetoothMonitorRuntime> => {
+  await loadPersistedHeartbeatIfNeeded();
+  stopDisconnectSubscription();
+  stopHeartbeatTimer();
+
+  setMonitorState({
+    status: 'starting',
+    selectedDeviceId: deviceId,
+    isSubscribedToDisconnect: false,
+    message: 'Starting Bluetooth monitor…',
+  });
+
+  disconnectSubscription = bleManager.onDeviceDisconnected(deviceId, async () => {
+    setMonitorState({
+      status: 'disconnected',
+      isSubscribedToDisconnect: true,
+      message: 'Device disconnected. Auto-detection can save parking once location is available.',
+    });
+  });
+
+  heartbeatTimer = setInterval(() => {
+    void bleManager
+      .isDeviceConnected(deviceId)
+      .then((isConnected) => {
+        if (!isConnected) {
+          return;
+        }
+
+        void updateLastHeartbeat(Date.now());
+        setMonitorState({
+          status: 'monitoring',
+          isSubscribedToDisconnect: true,
+          message: 'Monitoring active connection state.',
+        });
+      })
+      .catch(() => {
+        setMonitorState({
+          status: 'error',
+          isSubscribedToDisconnect: true,
+          message: 'Heartbeat check failed. Monitor will keep retrying.',
+        });
+      });
+  }, DEFAULT_MONITOR_HEARTBEAT_MS);
+
+  setMonitorState({
+    status: 'monitoring',
+    isSubscribedToDisconnect: true,
+    message: 'Monitor subscribed to disconnect events.',
+  });
+
+  return monitorState;
 };
