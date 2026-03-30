@@ -144,7 +144,17 @@ function getGoogleKeys() {
 }
 
 export default function MapScreen() {
-  const { currentParking, currentLocation, getDistanceToCar, getWalkingTimeToCar, endParkingSession } = useParking();
+  const {
+    currentParking,
+    currentLocation,
+    getDistanceToCar,
+    getWalkingTimeToCar,
+    endParkingSession,
+    quickNavigationPresets,
+    offlineParkingZones,
+    navigationTarget,
+    setNavigationTarget,
+  } = useParking();
   const { showError, showDestructive } = useDialog();
   const theme = useTheme();
   const isDark = theme?.isDark ?? false;
@@ -158,7 +168,6 @@ export default function MapScreen() {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [routeCoordinates, setRouteCoordinates] = useState<Coordinates[]>([]);
   const [routeMeta, setRouteMeta] = useState<RouteMeta>({ mode: 'osrm', totalDistance: null, etaMinutes: null });
-  const [manualPin, setManualPin] = useState<Coordinates | null>(null);
   const [isPinDropMode, setIsPinDropMode] = useState(false);
   const [isSheetHidden, setIsSheetHidden] = useState(false);
 
@@ -292,17 +301,19 @@ export default function MapScreen() {
     throw lastError;
   }, []);
 
-  const navigationTarget = useMemo(
-    () =>
-      manualPin ??
-      (currentParking
-        ? { latitude: currentParking.latitude, longitude: currentParking.longitude }
-        : null),
-    [currentParking, manualPin],
-  );
+  const resolvedNavigationTarget = useMemo(() => {
+    if (navigationTarget) return navigationTarget;
+    if (!currentParking) return null;
+    return {
+      kind: 'current-parking' as const,
+      latitude: currentParking.latitude,
+      longitude: currentParking.longitude,
+      label: 'My parked car',
+    };
+  }, [currentParking, navigationTarget]);
 
   const buildNavigation = useCallback(async () => {
-    if (!navigationTarget) {
+    if (!resolvedNavigationTarget) {
       showError(DIALOG_COPY.prompts.noParkingSaved.title, DIALOG_COPY.prompts.noParkingSaved.message);
       return;
     }
@@ -314,14 +325,13 @@ export default function MapScreen() {
 
     setIsLoadingRoute(true);
     console.info('[MapScreen] navigation_build_started', {
-      hasManualPin: Boolean(manualPin),
-      target: navigationTarget,
+      target: resolvedNavigationTarget,
     });
 
     try {
       const next = await fetchRoute(currentLocation, {
-        latitude: navigationTarget.latitude,
-        longitude: navigationTarget.longitude,
+        latitude: resolvedNavigationTarget.latitude,
+        longitude: resolvedNavigationTarget.longitude,
       });
 
       setRouteCoordinates(next.coordinates);
@@ -349,13 +359,13 @@ export default function MapScreen() {
         Math.round(
           distanceBetween(
             { latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude },
-            { latitude: navigationTarget.latitude, longitude: navigationTarget.longitude },
+            { latitude: resolvedNavigationTarget.latitude, longitude: resolvedNavigationTarget.longitude },
           ),
         ),
       );
       setRouteCoordinates([
         { latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude },
-        { latitude: navigationTarget.latitude, longitude: navigationTarget.longitude },
+        { latitude: resolvedNavigationTarget.latitude, longitude: resolvedNavigationTarget.longitude },
       ]);
       setNavigationSteps([{ instruction: 'Continue straight to your parked car', distance: fallbackDistance }]);
       setCurrentStepIndex(0);
@@ -379,11 +389,11 @@ export default function MapScreen() {
     } finally {
       setIsLoadingRoute(false);
     }
-  }, [navigationTarget, currentLocation, fetchRoute, manualPin, showError, walkingTime]);
+  }, [resolvedNavigationTarget, currentLocation, fetchRoute, showError, walkingTime]);
 
   const openExternalMaps = useCallback(() => {
-    const target = navigationTarget
-      ? { latitude: navigationTarget.latitude, longitude: navigationTarget.longitude, label: manualPin ? 'Manual Pin' : 'Parked Car' }
+    const target = resolvedNavigationTarget
+      ? { latitude: resolvedNavigationTarget.latitude, longitude: resolvedNavigationTarget.longitude, label: resolvedNavigationTarget.label }
       : currentLocation
         ? { latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude, label: 'Current Location' }
         : null;
@@ -404,7 +414,7 @@ export default function MapScreen() {
     void Linking.openURL(mapsUrl).catch(() => {
       showError('Unable to open maps', 'Please try again.');
     });
-  }, [currentLocation, manualPin, navigationTarget, showError]);
+  }, [currentLocation, resolvedNavigationTarget, showError]);
 
   const shareParking = useCallback(async () => {
     if (!currentParking) {
@@ -462,7 +472,12 @@ export default function MapScreen() {
         onPress={(event) => {
           if (!isPinDropMode) return;
           const coordinate = event.nativeEvent.coordinate;
-          setManualPin({ latitude: coordinate.latitude, longitude: coordinate.longitude });
+          setNavigationTarget({
+            kind: 'manual-pin',
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            label: 'Manual pin',
+          });
           setIsPinDropMode(false);
           void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }}
@@ -485,8 +500,8 @@ export default function MapScreen() {
           />
         )}
 
-        {manualPin && (
-          <Marker coordinate={manualPin} title="Manual pin" description="Custom navigation target">
+        {resolvedNavigationTarget?.kind === 'manual-pin' && (
+          <Marker coordinate={{ latitude: resolvedNavigationTarget.latitude, longitude: resolvedNavigationTarget.longitude }} title="Manual pin" description="Custom navigation target">
             <View style={[styles.manualPin, { backgroundColor: colors.warning }]}>
               <Pin size={14} color="#fff" />
             </View>
@@ -641,7 +656,7 @@ export default function MapScreen() {
             <Text style={[styles.secondaryActionLabel, { color: colors.text }]}>Open Maps</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.primaryAction, { backgroundColor: colors.accent }]} onPress={() => void buildNavigation()} disabled={isLoadingRoute || !navigationTarget}>
+          <TouchableOpacity style={[styles.primaryAction, { backgroundColor: colors.accent }]} onPress={() => void buildNavigation()} disabled={isLoadingRoute || !resolvedNavigationTarget}>
             {isLoadingRoute ? (
               <ActivityIndicator size="small" color={colors.textOnAccent} />
             ) : (
@@ -649,6 +664,42 @@ export default function MapScreen() {
             )}
             <Text style={[styles.primaryActionLabel, { color: colors.textOnAccent }]}>{isLoadingRoute ? 'Building...' : 'Start Walk Route'}</Text>
           </TouchableOpacity>
+        </View>
+        <View style={styles.targetList}>
+          {quickNavigationPresets.slice(0, 2).map((preset) => (
+            <TouchableOpacity
+              key={preset.id}
+              style={[styles.targetChip, { backgroundColor: colors.surfaceSecondary }]}
+              onPress={() =>
+                setNavigationTarget({
+                  kind: 'quick-preset',
+                  presetId: preset.id,
+                  latitude: preset.destination.latitude,
+                  longitude: preset.destination.longitude,
+                  label: preset.label,
+                })
+              }
+            >
+              <Text style={[styles.targetChipText, { color: colors.text }]} numberOfLines={1}>Preset: {preset.label}</Text>
+            </TouchableOpacity>
+          ))}
+          {offlineParkingZones.slice(0, 2).map((zone) => (
+            <TouchableOpacity
+              key={zone.id}
+              style={[styles.targetChip, { backgroundColor: colors.surfaceSecondary }]}
+              onPress={() =>
+                setNavigationTarget({
+                  kind: 'offline-zone',
+                  zoneId: zone.id,
+                  latitude: zone.center.latitude,
+                  longitude: zone.center.longitude,
+                  label: zone.name,
+                })
+              }
+            >
+              <Text style={[styles.targetChipText, { color: colors.text }]} numberOfLines={1}>Zone: {zone.name}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         <TouchableOpacity
@@ -898,6 +949,18 @@ const styles = StyleSheet.create({
   actionsRow: {
     flexDirection: 'row',
     gap: 10,
+  },
+  targetList: {
+    gap: 8,
+  },
+  targetChip: {
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  targetChipText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   secondaryAction: {
     flex: 1,

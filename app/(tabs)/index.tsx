@@ -15,6 +15,7 @@ import {
   Modal,
   TextInput,
   useWindowDimensions,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -176,6 +177,9 @@ export default function HomeScreen() {
     timerRemaining,
     isTimerActive,
     updateParkingSpot,
+    quickNavigationPresets,
+    addQuickNavigationPreset,
+    setNavigationTarget,
   } = useParking();
   const theme = useTheme();
   const isDark = theme?.isDark ?? false;
@@ -231,8 +235,46 @@ export default function HomeScreen() {
 
   const handleNavigateToCar = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (currentParking) {
+      setNavigationTarget({
+        kind: 'current-parking',
+        latitude: currentParking.latitude,
+        longitude: currentParking.longitude,
+        label: 'My parked car',
+      });
+    }
     router.push('/map');
-  }, [router]);
+  }, [currentParking, router, setNavigationTarget]);
+
+  const handleCreateQuickPreset = useCallback(async () => {
+    if (!currentParking) {
+      showError('No parking to save', 'Save a parking location first, then create a quick preset.');
+      return;
+    }
+    try {
+      const created = await addQuickNavigationPreset({
+        label: currentParking.address || 'Saved car spot',
+        destination: { latitude: currentParking.latitude, longitude: currentParking.longitude },
+        mode: 'walking',
+      });
+      Alert.alert('Quick preset saved', `Added "${created.label}" to your quick destinations.`);
+    } catch {
+      showError('Unable to save preset', 'Please try again.');
+    }
+  }, [addQuickNavigationPreset, currentParking, showError]);
+
+  const handleUsePreset = useCallback((presetId: string) => {
+    const preset = quickNavigationPresets.find((item) => item.id === presetId);
+    if (!preset) return;
+    setNavigationTarget({
+      kind: 'quick-preset',
+      presetId: preset.id,
+      label: preset.label,
+      latitude: preset.destination.latitude,
+      longitude: preset.destination.longitude,
+    });
+    router.push('/map');
+  }, [quickNavigationPresets, router, setNavigationTarget]);
 
   const handleOpenHistory = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -390,6 +432,21 @@ export default function HomeScreen() {
           />
         </Animated.View>
 
+        <View style={styles.section}>
+          <View style={styles.presetHeaderRow}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick presets</Text>
+            <TouchableOpacity style={[styles.inlineButton, { borderColor: colors.border }]} onPress={() => void handleCreateQuickPreset()}>
+              <Text style={[styles.inlineButtonLabel, { color: colors.accent }]}>Save current</Text>
+            </TouchableOpacity>
+          </View>
+          {quickNavigationPresets.slice(0, 3).map((preset) => (
+            <TouchableOpacity key={preset.id} style={[styles.presetItem, { backgroundColor: colors.card }]} onPress={() => handleUsePreset(preset.id)}>
+              <Text style={[styles.presetName, { color: colors.text }]} numberOfLines={1}>{preset.label}</Text>
+              <Text style={[styles.presetMeta, { color: colors.textMuted }]}>Use in map navigation</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {currentParking && (
           <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }]}>
             <Text style={[styles.sectionTitle, styles.sectionTitleResponsive, isCompact && styles.sectionTitleCompact, isExpanded && styles.sectionTitleExpanded, { color: colors.text }]}>Extras</Text>
@@ -433,6 +490,34 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: 12,
+  },
+  presetHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  inlineButton: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  inlineButtonLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  presetItem: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  presetName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  presetMeta: {
+    marginTop: 2,
+    fontSize: 12,
   },
   setupPrompt: {
     borderRadius: 16,
