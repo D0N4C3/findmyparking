@@ -42,6 +42,15 @@ type RouteStep = {
   distance: number;
 };
 
+type RouteMode = 'osrm' | 'direct';
+type RouteErrorKind = 'network_timeout' | 'no_route' | 'api_error';
+
+type RouteMeta = {
+  mode: RouteMode;
+  totalDistance: number | null;
+  etaMinutes: number | null;
+};
+
 type Coordinates = {
   latitude: number;
   longitude: number;
@@ -61,6 +70,25 @@ function formatDistance(meters: number | null): string {
   if (meters == null) return '--';
   if (meters < 1000) return `${Math.round(meters)} m`;
   return `${(meters / 1000).toFixed(1)} km`;
+}
+
+function formatEta(minutes: number | null): string {
+  if (minutes == null) return '--';
+  return `${Math.max(1, Math.round(minutes))} min`;
+}
+
+function distanceBetween(a: Coordinates, b: Coordinates): number {
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+  const earthRadius = 6371000;
+  const dLat = toRadians(b.latitude - a.latitude);
+  const dLon = toRadians(b.longitude - a.longitude);
+  const lat1 = toRadians(a.latitude);
+  const lat2 = toRadians(b.latitude);
+  const h =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+  const c = 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  return earthRadius * c;
 }
 
 function decodePolyline(encoded: string): Coordinates[] {
@@ -127,7 +155,9 @@ export default function MapScreen() {
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
   const [navigationSteps, setNavigationSteps] = useState<RouteStep[]>([]);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [routeCoordinates, setRouteCoordinates] = useState<Coordinates[]>([]);
+  const [routeMeta, setRouteMeta] = useState<RouteMeta>({ mode: 'osrm', totalDistance: null, etaMinutes: null });
   const [manualPin, setManualPin] = useState<Coordinates | null>(null);
   const [isPinDropMode, setIsPinDropMode] = useState(false);
   const [isSheetHidden, setIsSheetHidden] = useState(false);
@@ -199,23 +229,67 @@ export default function MapScreen() {
 
   const fetchRoute = useCallback(async (from: Location.LocationObject, to: Coordinates) => {
     const endpoint = `https://router.project-osrm.org/route/v1/walking/${from.coords.longitude},${from.coords.latitude};${to.longitude},${to.latitude}?overview=full&geometries=polyline&steps=true`;
-    const response = await fetch(endpoint);
-    if (!response.ok) throw new Error(`Route API error ${response.status}`);
-    const payload = await response.json();
+    const maxAttempts = 3;
+    const requestTimeoutMs = 7000;
+    const backoffMs = [350, 900];
+    let lastError: unknown = null;
 
-    const route = payload?.routes?.[0];
-    if (!route?.geometry) throw new Error('Route payload missing geometry');
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
 
-    const coordinates = decodePolyline(route.geometry);
-    const steps = (route.legs?.[0]?.steps ?? []).map((step: { distance?: number; maneuver?: { type?: string; modifier?: string } }) => ({
-      instruction: `${step.maneuver?.type ?? 'Continue'}${step.maneuver?.modifier ? ` ${step.maneuver.modifier}` : ''}`,
-      distance: Math.max(1, Math.round(step.distance ?? 0)),
-    }));
+      try {
+        const response = await fetch(endpoint, { signal: controller.signal });
+        if (!response.ok) {
+          throw { kind: 'api_error' as const, status: response.status, message: `Route API error ${response.status}` };
+        }
 
-    return {
-      coordinates,
-      steps: steps.length > 0 ? steps : [{ instruction: 'Continue to your parked car', distance: Math.max(1, Math.round(route.distance ?? 0)) }],
-    };
+        const payload = await response.json();
+        if (payload?.code === 'NoRoute') {
+          throw { kind: 'no_route' as const, message: 'No walkable route available' };
+        }
+
+        const route = payload?.routes?.[0];
+        if (!route?.geometry) {
+          throw { kind: 'api_error' as const, message: 'Route payload missing geometry' };
+        }
+
+        const coordinates = decodePolyline(route.geometry);
+        const steps = (route.legs?.[0]?.steps ?? []).map(
+          (step: { distance?: number; maneuver?: { type?: string; modifier?: string; instruction?: string }; name?: string }) => ({
+            instruction:
+              step.maneuver?.instruction ??
+              [step.maneuver?.type ?? 'Continue', step.maneuver?.modifier, step.name].filter(Boolean).join(' '),
+            distance: Math.max(1, Math.round(step.distance ?? 0)),
+          }),
+        );
+
+        return {
+          coordinates,
+          steps:
+            steps.length > 0
+              ? steps
+              : [{ instruction: 'Continue to your parked car', distance: Math.max(1, Math.round(route.distance ?? 0)) }],
+          totalDistance: Math.max(1, Math.round(route.distance ?? 0)),
+          etaMinutes: route.duration ? Math.max(1, Math.round(route.duration / 60)) : null,
+        };
+      } catch (error) {
+        const isAbortError = typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError';
+        const typedError =
+          isAbortError || error instanceof TypeError
+            ? { kind: 'network_timeout' as const, message: 'Network timeout while fetching route' }
+            : error;
+        lastError = typedError;
+        const kind = (typedError as { kind?: RouteErrorKind })?.kind;
+        const shouldRetry = attempt < maxAttempts && kind === 'network_timeout';
+        if (!shouldRetry) throw typedError;
+        await new Promise((resolve) => setTimeout(resolve, backoffMs[attempt - 1] ?? backoffMs[backoffMs.length - 1]));
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    throw lastError;
   }, []);
 
   const navigationTarget = useMemo(
@@ -239,6 +313,10 @@ export default function MapScreen() {
     }
 
     setIsLoadingRoute(true);
+    console.info('[MapScreen] navigation_build_started', {
+      hasManualPin: Boolean(manualPin),
+      target: navigationTarget,
+    });
 
     try {
       const next = await fetchRoute(currentLocation, {
@@ -248,22 +326,60 @@ export default function MapScreen() {
 
       setRouteCoordinates(next.coordinates);
       setNavigationSteps(next.steps);
+      setCurrentStepIndex(0);
+      setRouteMeta({
+        mode: 'osrm',
+        totalDistance: next.totalDistance,
+        etaMinutes: next.etaMinutes,
+      });
+      console.info('[MapScreen] navigation_build_success', {
+        mode: 'osrm',
+        steps: next.steps.length,
+        totalDistance: next.totalDistance,
+        etaMinutes: next.etaMinutes,
+      });
       mapRef.current?.fitToCoordinates(next.coordinates, {
         edgePadding: { top: 140, right: 80, bottom: 320, left: 80 },
         animated: true,
       });
     } catch (error) {
+      const errorKind = (error as { kind?: RouteErrorKind })?.kind ?? 'api_error';
+      const fallbackDistance = Math.max(
+        1,
+        Math.round(
+          distanceBetween(
+            { latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude },
+            { latitude: navigationTarget.latitude, longitude: navigationTarget.longitude },
+          ),
+        ),
+      );
       setRouteCoordinates([
         { latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude },
         { latitude: navigationTarget.latitude, longitude: navigationTarget.longitude },
       ]);
-      setNavigationSteps([{ instruction: 'Continue straight to your parked car', distance: Math.max(1, Math.round(getDistanceToCar() ?? 0)) }]);
-      showError('Live routing unavailable', 'Using direct guidance line right now.');
-      console.warn('[MapScreen] route fallback', error);
+      setNavigationSteps([{ instruction: 'Continue straight to your parked car', distance: fallbackDistance }]);
+      setCurrentStepIndex(0);
+      setRouteMeta({
+        mode: 'direct',
+        totalDistance: fallbackDistance,
+        etaMinutes: walkingTime ?? null,
+      });
+      if (errorKind === 'network_timeout') {
+        showError('Routing timed out', 'Network timeout while building route. Direct guidance mode is active.');
+      } else if (errorKind === 'no_route') {
+        showError('No walking route found', 'No route path available here. Direct guidance mode is active.');
+      } else {
+        showError('Live routing unavailable', 'Routing API error detected. Direct guidance mode is active.');
+      }
+      console.warn('[MapScreen] navigation_build_fallback', {
+        reason: errorKind,
+        fallbackDistance,
+        error,
+      });
     } finally {
       setIsLoadingRoute(false);
     }
-  }, [navigationTarget, currentLocation, fetchRoute, getDistanceToCar, showError]);
+  }, [navigationTarget, currentLocation, fetchRoute, manualPin, showError, walkingTime]);
 
   const openExternalMaps = useCallback(() => {
     const target = navigationTarget
@@ -318,11 +434,19 @@ export default function MapScreen() {
         void endParkingSession();
         setNavigationSteps([]);
         setRouteCoordinates([]);
+        setCurrentStepIndex(0);
+        setRouteMeta({ mode: 'osrm', totalDistance: null, etaMinutes: null });
       },
     });
   }, [currentParking, endParkingSession, showDestructive]);
 
-  const firstStep = navigationSteps[0];
+  const safeStepIndex = navigationSteps.length > 0 ? Math.min(currentStepIndex, navigationSteps.length - 1) : 0;
+  const activeStep = navigationSteps[safeStepIndex];
+  const nextStep = navigationSteps[safeStepIndex + 1];
+  const remainingDistance = useMemo(
+    () => navigationSteps.slice(safeStepIndex).reduce((sum, step) => sum + step.distance, 0),
+    [navigationSteps, safeStepIndex],
+  );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -374,7 +498,14 @@ export default function MapScreen() {
         <View style={styles.headerRow}>
           <View>
             <Text style={[styles.title, { color: '#fff' }]}>Navigate to car</Text>
-            <Text style={[styles.subtitle, { color: 'rgba(255,255,255,0.82)' }]}>Premium walk-first guidance</Text>
+            <Text style={[styles.subtitle, { color: 'rgba(255,255,255,0.82)' }]}>
+              {routeMeta.mode === 'direct' ? 'Direct guidance mode active' : 'Premium walk-first guidance'}
+            </Text>
+            {routeMeta.mode === 'direct' && (
+              <View style={styles.directModeBadge}>
+                <Text style={styles.directModeBadgeLabel}>DIRECT GUIDANCE MODE</Text>
+              </View>
+            )}
           </View>
 
           <TouchableOpacity style={styles.iconAction} onPress={() => void shareParking()}>
@@ -454,13 +585,53 @@ export default function MapScreen() {
           </View>
         </View>
 
-        {firstStep && (
+        {(routeMeta.totalDistance != null || routeMeta.etaMinutes != null) && (
+          <View style={styles.chipsRow}>
+            <View style={[styles.metaChip, { backgroundColor: colors.surfaceSecondary }]}>
+              <Text style={[styles.metaChipLabel, { color: colors.textSecondary }]}>Route</Text>
+              <Text style={[styles.metaChipValue, { color: colors.text }]}>
+                {routeMeta.mode === 'osrm' ? 'OSRM walk route' : 'Direct guidance'}
+              </Text>
+            </View>
+            <View style={[styles.metaChip, { backgroundColor: colors.surfaceSecondary }]}>
+              <Text style={[styles.metaChipLabel, { color: colors.textSecondary }]}>Distance</Text>
+              <Text style={[styles.metaChipValue, { color: colors.text }]}>{formatDistance(routeMeta.totalDistance)}</Text>
+            </View>
+            <View style={[styles.metaChip, { backgroundColor: colors.surfaceSecondary }]}>
+              <Text style={[styles.metaChipLabel, { color: colors.textSecondary }]}>ETA</Text>
+              <Text style={[styles.metaChipValue, { color: colors.text }]}>{formatEta(routeMeta.etaMinutes)}</Text>
+            </View>
+          </View>
+        )}
+
+        {activeStep && (
           <View style={[styles.stepCard, { backgroundColor: colors.surfaceSecondary }]}> 
             <Route size={16} color={colors.accent} />
             <View style={styles.stepTextWrap}>
-              <Text style={[styles.stepTitle, { color: colors.text }]} numberOfLines={2}>{firstStep.instruction}</Text>
-              <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>{formatDistance(firstStep.distance)} to next point</Text>
+              <Text style={[styles.stepProgressLabel, { color: colors.textSecondary }]}>
+                Step {safeStepIndex + 1} of {navigationSteps.length}
+              </Text>
+              <Text style={[styles.stepTitle, { color: colors.text }]} numberOfLines={2}>{activeStep.instruction}</Text>
+              <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
+                {formatDistance(activeStep.distance)} now • {formatDistance(remainingDistance)} remaining
+              </Text>
+              {nextStep ? (
+                <Text style={[styles.stepUpcoming, { color: colors.textSecondary }]} numberOfLines={2}>
+                  Next: {nextStep.instruction} ({formatDistance(nextStep.distance)})
+                </Text>
+              ) : (
+                <Text style={[styles.stepUpcoming, { color: colors.textSecondary }]} numberOfLines={1}>
+                  Final segment to your car
+                </Text>
+              )}
             </View>
+            <TouchableOpacity
+              style={[styles.stepAdvance, { backgroundColor: colors.accent }]}
+              onPress={() => setCurrentStepIndex((prev) => Math.min(prev + 1, navigationSteps.length - 1))}
+              disabled={safeStepIndex >= navigationSteps.length - 1}
+            >
+              <Text style={[styles.stepAdvanceLabel, { color: colors.textOnAccent }]}>Next</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -515,6 +686,20 @@ const styles = StyleSheet.create({
     marginTop: 3,
     fontSize: 15,
     fontWeight: '600',
+  },
+  directModeBadge: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(245,158,11,0.95)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  directModeBadgeLabel: {
+    color: '#111827',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   iconAction: {
     width: 42,
@@ -653,8 +838,34 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
   },
+  chipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  metaChip: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    gap: 2,
+  },
+  metaChipLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  metaChipValue: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   stepTextWrap: {
     flex: 1,
+  },
+  stepProgressLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginBottom: 2,
   },
   stepTitle: {
     fontSize: 14,
@@ -665,6 +876,24 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 12,
     fontWeight: '500',
+  },
+  stepUpcoming: {
+    marginTop: 3,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  stepAdvance: {
+    minWidth: 48,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    alignSelf: 'stretch',
+  },
+  stepAdvanceLabel: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   actionsRow: {
     flexDirection: 'row',
