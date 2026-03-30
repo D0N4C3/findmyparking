@@ -1,4 +1,5 @@
-import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
+import { PermissionsAndroid, Platform } from 'react-native';
+import { BleErrorCode, BleManager, Device, State } from 'react-native-ble-plx';
 
 export interface BluetoothDevice {
   id: string;
@@ -27,89 +28,61 @@ export interface BluetoothScanResult {
   message?: string;
 }
 
-interface BluetoothNativeModule {
-  getPairedDevices?: () => Promise<unknown[]>;
-  scanForDevices?: (timeoutMs?: number) => Promise<unknown[]>;
-}
-
 const DEFAULT_TIMEOUT_MS = 10_000;
-const DEFAULT_RETRIES = 1;
+const bleManager = new BleManager();
 
-const resolveBluetoothModule = (): BluetoothNativeModule | null => {
-  const modules = NativeModules as Record<string, BluetoothNativeModule | undefined>;
-  return modules.RNBluetoothClassic ?? modules.BluetoothClassic ?? modules.BluetoothManager ?? null;
-};
-
-const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number) => {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error('timeout')), timeoutMs);
-  });
-
-  try {
-    return await Promise.race([promise, timeoutPromise]);
-  } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-  }
-};
-
-const normalizeDevice = (device: unknown): BluetoothDevice | null => {
-  if (!device || typeof device !== 'object') {
-    return null;
-  }
-
-  const rawDevice = device as Record<string, unknown>;
-  const address =
-    (typeof rawDevice.address === 'string' && rawDevice.address) ||
-    (typeof rawDevice.macAddress === 'string' && rawDevice.macAddress) ||
-    (typeof rawDevice.id === 'string' && rawDevice.id) ||
-    '';
-
-  if (!address) {
-    return null;
-  }
-
-  const name =
-    (typeof rawDevice.name === 'string' && rawDevice.name.trim()) ||
-    (typeof rawDevice.deviceName === 'string' && rawDevice.deviceName.trim()) ||
-    'Unknown device';
+const normalizeDevice = (device: Device): BluetoothDevice => {
+  const name = device.name?.trim() || device.localName?.trim() || 'Unknown device';
 
   return {
-    id: address,
+    id: device.id,
     name,
-    address,
+    address: device.id,
   };
 };
 
-const dedupeDevices = (devices: BluetoothDevice[]) => {
-  const map = new Map<string, BluetoothDevice>();
-
-  for (const device of devices) {
-    const key = device.id || device.address;
-    if (!map.has(key)) {
-      map.set(key, device);
-    }
+const waitForBluetoothPoweredOn = async (): Promise<boolean> => {
+  const state = await bleManager.state();
+  if (state === State.PoweredOn) {
+    return true;
   }
 
-  return Array.from(map.values());
+  return new Promise<boolean>((resolve) => {
+    const subscription = bleManager.onStateChange((nextState) => {
+      if (nextState === State.PoweredOn) {
+        subscription.remove();
+        resolve(true);
+      }
+    }, true);
+
+    setTimeout(() => {
+      subscription.remove();
+      resolve(false);
+    }, 3_000);
+  });
+};
+
+const getAndroidPermissions = () => {
+  if (Platform.Version >= 31) {
+    return [
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+    ];
+  }
+
+  return [
+    PermissionsAndroid.PERMISSIONS.BLUETOOTH,
+    PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADMIN,
+    PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+  ];
 };
 
 export const requestBluetoothPermissions = async (): Promise<BluetoothPermissionResult> => {
   if (Platform.OS === 'android') {
-    if (Platform.Version < 31) {
-      return { status: 'granted' };
-    }
-
-    const permissions = [
-      PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-    ];
+    const permissions = getAndroidPermissions();
 
     const result = await PermissionsAndroid.requestMultiple(permissions);
-
     const hasAllPermissions = permissions.every(
       (permission) => result[permission] === PermissionsAndroid.RESULTS.GRANTED
     );
@@ -123,7 +96,6 @@ export const requestBluetoothPermissions = async (): Promise<BluetoothPermission
   }
 
   if (Platform.OS === 'ios') {
-    // iOS prompts for Bluetooth usage based on Info.plist keys and first Bluetooth access.
     return { status: 'granted' };
   }
 
@@ -137,7 +109,6 @@ export const scanBluetoothDevices = async (
   options: ScanBluetoothDevicesOptions = {}
 ): Promise<BluetoothScanResult> => {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const retries = options.retries ?? DEFAULT_RETRIES;
 
   const permissionResult = await requestBluetoothPermissions();
   if (permissionResult.status !== 'granted') {
@@ -149,72 +120,76 @@ export const scanBluetoothDevices = async (
     };
   }
 
-  const bluetoothModule = resolveBluetoothModule();
-  if (!bluetoothModule?.getPairedDevices && !bluetoothModule?.scanForDevices) {
+  const bluetoothEnabled = await waitForBluetoothPoweredOn();
+  if (!bluetoothEnabled) {
     return {
-      status: 'unsupported',
+      status: 'error',
       devices: [],
-      attempts: 0,
-      message: 'Bluetooth scanner module is unavailable on this build.',
+      attempts: 1,
+      message: 'Turn on Bluetooth and try scanning again.',
     };
   }
 
-  let timeoutCount = 0;
+  return new Promise<BluetoothScanResult>((resolve) => {
+    const devices = new Map<string, BluetoothDevice>();
+    let settled = false;
 
-  for (let attempt = 1; attempt <= retries + 1; attempt += 1) {
-    try {
-      const scanPromises: Promise<unknown[]>[] = [];
-
-      if (bluetoothModule.getPairedDevices) {
-        scanPromises.push(withTimeout(bluetoothModule.getPairedDevices(), timeoutMs));
+    const finish = (result: BluetoothScanResult) => {
+      if (settled) {
+        return;
       }
 
-      if (bluetoothModule.scanForDevices) {
-        scanPromises.push(withTimeout(bluetoothModule.scanForDevices(timeoutMs), timeoutMs));
-      }
+      settled = true;
+      bleManager.stopDeviceScan();
+      resolve(result);
+    };
 
-      const batches = await Promise.all(scanPromises);
-      const normalized = dedupeDevices(
-        batches
-          .flat()
-          .map(normalizeDevice)
-          .filter((device): device is BluetoothDevice => device !== null)
-      );
+    bleManager.startDeviceScan(null, null, (error, scannedDevice) => {
+      if (error) {
+        if (error.errorCode === BleErrorCode.BluetoothUnauthorized) {
+          finish({
+            status: 'permission-denied',
+            devices: [],
+            attempts: 1,
+            message: 'Bluetooth permissions were denied by the operating system.',
+          });
+          return;
+        }
 
-      if (normalized.length > 0) {
-        return {
-          status: 'success',
-          devices: normalized,
-          attempts: attempt,
-        };
-      }
-    } catch (error) {
-      if (error instanceof Error && error.message === 'timeout') {
-        timeoutCount += 1;
-      } else if (attempt === retries + 1) {
-        return {
+        finish({
           status: 'error',
           devices: [],
-          attempts: attempt,
+          attempts: 1,
           message: 'Unable to scan for Bluetooth devices right now.',
-        };
+        });
+        return;
       }
-    }
-  }
 
-  if (timeoutCount > 0) {
-    return {
-      status: 'timeout',
-      devices: [],
-      attempts: retries + 1,
-      message: 'Bluetooth scan timed out. Please move closer to your car and try again.',
-    };
-  }
+      if (!scannedDevice) {
+        return;
+      }
 
-  return {
-    status: 'empty',
-    devices: [],
-    attempts: retries + 1,
-    message: 'No Bluetooth devices found. Make sure your car is discoverable.',
-  };
+      devices.set(scannedDevice.id, normalizeDevice(scannedDevice));
+    });
+
+    setTimeout(() => {
+      const normalizedDevices = Array.from(devices.values());
+
+      if (normalizedDevices.length > 0) {
+        finish({
+          status: 'success',
+          devices: normalizedDevices,
+          attempts: 1,
+        });
+        return;
+      }
+
+      finish({
+        status: 'empty',
+        devices: [],
+        attempts: 1,
+        message: 'No Bluetooth devices found. Make sure your car is discoverable.',
+      });
+    }, timeoutMs);
+  });
 };
