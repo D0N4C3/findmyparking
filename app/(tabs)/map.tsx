@@ -12,6 +12,9 @@ import {
   Linking,
   Share,
   ActivityIndicator,
+  Animated,
+  PanResponder,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -120,6 +123,7 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const mapRef = useRef<MapView>(null);
+  const { height } = useWindowDimensions();
 
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
@@ -191,26 +195,6 @@ export default function MapScreen() {
     );
   }, [currentParking]);
 
-  const fitRoute = useCallback(() => {
-    if (!mapRef.current) return;
-    const points: Coordinates[] = [];
-
-    if (currentLocation) {
-      points.push({ latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude });
-    }
-
-    if (currentParking) {
-      points.push({ latitude: currentParking.latitude, longitude: currentParking.longitude });
-    }
-
-    if (points.length < 2) return;
-
-    mapRef.current.fitToCoordinates(points, {
-      edgePadding: { top: 120, right: 80, bottom: 240, left: 80 },
-      animated: true,
-    });
-  }, [currentLocation, currentParking]);
-
   const fetchRoute = useCallback(async (from: Location.LocationObject, to: Coordinates) => {
     const endpoint = `https://router.project-osrm.org/route/v1/walking/${from.coords.longitude},${from.coords.latitude};${to.longitude},${to.latitude}?overview=full&geometries=polyline&steps=true`;
     const response = await fetch(endpoint);
@@ -253,7 +237,10 @@ export default function MapScreen() {
 
       setRouteCoordinates(next.coordinates);
       setNavigationSteps(next.steps);
-      fitRoute();
+      mapRef.current?.fitToCoordinates(next.coordinates, {
+        edgePadding: { top: 140, right: 80, bottom: 320, left: 80 },
+        animated: true,
+      });
     } catch (error) {
       setRouteCoordinates([
         { latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude },
@@ -265,7 +252,7 @@ export default function MapScreen() {
     } finally {
       setIsLoadingRoute(false);
     }
-  }, [currentParking, currentLocation, fetchRoute, fitRoute, getDistanceToCar, showError]);
+  }, [currentParking, currentLocation, fetchRoute, getDistanceToCar, showError]);
 
   const openExternalMaps = useCallback(() => {
     const target = currentParking
@@ -326,87 +313,142 @@ export default function MapScreen() {
 
   const firstStep = navigationSteps[0];
 
+  const collapsedY = Math.max(height * 0.63, 380);
+  const midY = Math.max(height * 0.42, 235);
+  const expandedY = Math.max(insets.top + 86, 96);
+  const sheetY = useRef(new Animated.Value(midY)).current;
+  const dragStartY = useRef(midY);
+
+  const snapTo = useCallback(
+    (nextY: number) => {
+      Animated.spring(sheetY, {
+        toValue: nextY,
+        useNativeDriver: true,
+        damping: 22,
+        stiffness: 180,
+      }).start();
+    },
+    [sheetY],
+  );
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 6,
+        onPanResponderGrant: () => {
+          sheetY.stopAnimation((value) => {
+            dragStartY.current = value;
+          });
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const next = dragStartY.current + gestureState.dy;
+          const clamped = Math.max(expandedY, Math.min(collapsedY, next));
+          sheetY.setValue(clamped);
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const end = dragStartY.current + gestureState.dy;
+          const candidates = [expandedY, midY, collapsedY];
+          const nearest = candidates.reduce((prev, current) =>
+            Math.abs(current - end) < Math.abs(prev - end) ? current : prev,
+          );
+
+          if (gestureState.vy < -0.9) {
+            snapTo(expandedY);
+            return;
+          }
+
+          if (gestureState.vy > 0.9) {
+            snapTo(collapsedY);
+            return;
+          }
+
+          snapTo(nearest);
+        },
+      }),
+    [collapsedY, expandedY, midY, sheetY, snapTo],
+  );
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
-        <View>
-          <Text style={[styles.title, { color: colors.text }]}>Navigate to car</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Fast route + quick controls</Text>
-        </View>
-
-        <TouchableOpacity style={[styles.iconAction, { backgroundColor: colors.surfaceSecondary }]} onPress={() => void shareParking()}>
-          <Share2 size={18} color={colors.text} />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.mapWrap}>
-        <MapView
-          ref={mapRef}
-          style={styles.map}
-          initialRegion={initialRegion}
-          provider={shouldUseGoogleProvider ? PROVIDER_GOOGLE : undefined}
-          mapType={mapType}
-          showsUserLocation={Platform.OS !== 'web'}
-          showsMyLocationButton={false}
-          toolbarEnabled={false}
-          customMapStyle={isDark ? darkMapStyle : []}
-        >
-          {currentParking && (
-            <Marker coordinate={{ latitude: currentParking.latitude, longitude: currentParking.longitude }} title="Your car" description="Saved parking location">
-              <View style={[styles.carPin, { backgroundColor: colors.accent }]}>
-                <Car size={14} color="#fff" />
-              </View>
-            </Marker>
-          )}
-
-          {routeCoordinates.length > 1 && (
-            <Polyline
-              coordinates={routeCoordinates}
-              strokeColor={colors.accent}
-              strokeWidth={5}
-              lineCap="round"
-              lineJoin="round"
-            />
-          )}
-        </MapView>
-
-        {needsMapSetup && (
-          <View style={[styles.setupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.setupTitle, { color: colors.text }]}>Google Maps setup required</Text>
-            <Text style={[styles.setupBody, { color: colors.textSecondary }]}>Set the platform key, rebuild, and reopen this tab.</Text>
-            <Text style={[styles.setupBody, { color: colors.textSecondary }]}>
-              Android key ({CANONICAL_ANDROID_KEY}): {keys.androidDetected ? 'Detected' : 'Missing'}
-            </Text>
-            <Text style={[styles.setupBody, { color: colors.textSecondary }]}>
-              iOS key ({CANONICAL_IOS_KEY}): {keys.iosDetected ? 'Detected' : 'Missing'}
-            </Text>
-            <Text style={[styles.setupHint, { color: colors.textMuted }]}>Expo Go and iOS without a native key will fall back to Apple Maps automatically.</Text>
-          </View>
+      <MapView
+        ref={mapRef}
+        style={StyleSheet.absoluteFill}
+        initialRegion={initialRegion}
+        provider={shouldUseGoogleProvider ? PROVIDER_GOOGLE : undefined}
+        mapType={mapType}
+        showsUserLocation={Platform.OS !== 'web'}
+        showsMyLocationButton={false}
+        toolbarEnabled={false}
+      >
+        {currentParking && (
+          <Marker coordinate={{ latitude: currentParking.latitude, longitude: currentParking.longitude }} title="Your car" description="Saved parking location">
+            <View style={[styles.carPin, { backgroundColor: colors.accent }]}>
+              <Car size={14} color="#fff" />
+            </View>
+          </Marker>
         )}
 
-        <View style={styles.fabStack}>
-          <TouchableOpacity style={[styles.fab, { backgroundColor: colors.card }]} onPress={() => setMapType((prev) => (prev === 'standard' ? 'satellite' : 'standard'))}>
-            <Layers size={20} color={colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.fab, { backgroundColor: colors.card }]} onPress={focusUser}>
-            <Crosshair size={20} color={colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.fab, { backgroundColor: colors.card }]} onPress={focusCar} disabled={!currentParking}>
-            <Car size={20} color={currentParking ? colors.accent : colors.textMuted} />
+        {routeCoordinates.length > 1 && (
+          <Polyline
+            coordinates={routeCoordinates}
+            strokeColor={colors.accent}
+            strokeWidth={5}
+            lineCap="round"
+            lineJoin="round"
+          />
+        )}
+      </MapView>
+
+      <View style={[styles.mapOverlay, { paddingTop: insets.top + 8 }]}>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={[styles.title, { color: '#fff' }]}>Navigate to car</Text>
+            <Text style={[styles.subtitle, { color: 'rgba(255,255,255,0.82)' }]}>Full map + draggable controls</Text>
+          </View>
+
+          <TouchableOpacity style={styles.iconAction} onPress={() => void shareParking()}>
+            <Share2 size={18} color="#fff" />
           </TouchableOpacity>
         </View>
+
+        <View style={styles.fabStack}>
+          <TouchableOpacity style={styles.fab} onPress={() => setMapType((prev) => (prev === 'standard' ? 'satellite' : 'standard'))}>
+            <Layers size={20} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.fab} onPress={focusUser}>
+            <Crosshair size={20} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.fab} onPress={focusCar} disabled={!currentParking}>
+            <Car size={20} color={currentParking ? '#fff' : 'rgba(255,255,255,0.45)'} />
+          </TouchableOpacity>
+        </View>
+
+        {needsMapSetup && (
+          <View style={[styles.setupCard, { backgroundColor: colors.card, borderColor: colors.border }]}> 
+            <Text style={[styles.setupTitle, { color: colors.text }]}>Google Maps setup required</Text>
+            <Text style={[styles.setupBody, { color: colors.textSecondary }]}>Set the platform key, rebuild, and reopen this tab.</Text>
+            <Text style={[styles.setupBody, { color: colors.textSecondary }]}>Android key ({CANONICAL_ANDROID_KEY}): {keys.androidDetected ? 'Detected' : 'Missing'}</Text>
+            <Text style={[styles.setupBody, { color: colors.textSecondary }]}>iOS key ({CANONICAL_IOS_KEY}): {keys.iosDetected ? 'Detected' : 'Missing'}</Text>
+          </View>
+        )}
       </View>
 
-      <View
+      <Animated.View
         style={[
           styles.bottomSheet,
           {
             backgroundColor: colors.card,
             borderTopColor: colors.border,
             paddingBottom: tabBarHeight + Math.max(insets.bottom, 12),
+            transform: [{ translateY: sheetY }],
           },
         ]}
       >
+        <View style={styles.dragHandleWrap} {...panResponder.panHandlers}>
+          <View style={[styles.dragHandle, { backgroundColor: colors.textMuted }]} />
+        </View>
+
         <View style={styles.metricsRow}>
           <View style={[styles.metricCard, { backgroundColor: colors.surfaceSecondary }]}>
             <LocateFixed size={16} color={colors.accent} />
@@ -461,66 +503,55 @@ export default function MapScreen() {
           <XCircle size={17} color={currentParking ? colors.error : colors.textMuted} />
           <Text style={[styles.endSessionLabel, { color: currentParking ? colors.error : colors.textMuted }]}>End Session</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }
 
-const darkMapStyle = [
-  { elementType: 'geometry', stylers: [{ color: '#1f2634' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#8997ad' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#364258' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#193a55' }] },
-];
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
+  mapOverlay: {
+    ...StyleSheet.absoluteFillObject,
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
+    justifyContent: 'space-between',
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   title: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 30,
+    fontWeight: '800',
   },
   subtitle: {
-    marginTop: 2,
-    fontSize: 13,
-    fontWeight: '500',
+    marginTop: 3,
+    fontSize: 15,
+    fontWeight: '600',
   },
   iconAction: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapWrap: {
-    flex: 1.2,
-    position: 'relative',
-  },
-  map: {
-    flex: 1,
-  },
-  fabStack: {
-    position: 'absolute',
-    right: 14,
-    top: 16,
-    gap: 10,
-  },
-  fab: {
     width: 42,
     height: 42,
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.34)',
+  },
+  fabStack: {
+    position: 'absolute',
+    right: 14,
+    top: 124,
+    gap: 10,
+  },
+  fab: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.36)',
     shadowColor: '#000',
-    shadowOpacity: 0.14,
+    shadowOpacity: 0.16,
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 14,
     elevation: 6,
@@ -538,7 +569,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 14,
     right: 14,
-    top: 14,
+    top: 118,
     borderWidth: 1,
     borderRadius: 14,
     padding: 12,
@@ -552,16 +583,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
   },
-  setupHint: {
-    marginTop: 8,
-    fontSize: 11,
-    fontWeight: '500',
-  },
   bottomSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
     borderTopWidth: 1,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 16,
-    paddingTop: 20,
+    paddingTop: 8,
     gap: 12,
+    minHeight: 320,
+  },
+  dragHandleWrap: {
+    alignItems: 'center',
+    paddingTop: 4,
+    paddingBottom: 6,
+  },
+  dragHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    opacity: 0.8,
   },
   metricsRow: {
     flexDirection: 'row',
