@@ -1,84 +1,220 @@
 import { Tabs } from "expo-router";
-import { Home, Clock, Settings, Compass } from "lucide-react-native";
-import React from "react";
-import { View, StyleSheet } from "react-native";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import { Home, Clock, Settings, Compass, Bluetooth } from "lucide-react-native";
+import React, { useEffect, useMemo, useRef } from "react";
+import {
+  Animated,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  type ViewStyle,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Colors } from "@/constants/colors";
+import { elevation, radius, spacing, typography } from "@/constants/design-system";
+import { useParking } from "@/context/ParkingContext";
 import { useTheme } from "@/context/ThemeContext";
 
-function TabIcon({ 
-  Icon, 
-  color, 
-  isFocused 
-}: { 
-  Icon: typeof Home; 
-  color: string; 
-  isFocused: boolean;
-}) {
+type TabRouteName = "index" | "map" | "history" | "settings";
+
+const TAB_ICON_MAP: Record<TabRouteName, typeof Home> = {
+  index: Home,
+  map: Compass,
+  history: Clock,
+  settings: Settings,
+};
+
+function getTabLabel(options: BottomTabBarProps["descriptors"][string]["options"], routeName: string) {
+  if (typeof options.tabBarLabel === "string") return options.tabBarLabel;
+  if (typeof options.title === "string") return options.title;
+  return routeName;
+}
+
+function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const isDark = theme?.isDark ?? false;
+  const colors = isDark ? Colors.dark : Colors.light;
+  const { currentParking, isAutoDetectionEnabled, savedBluetoothDevice } = useParking();
+
+  const animatedValues = useRef<Record<string, Animated.Value>>({}).current;
+
+  useEffect(() => {
+    state.routes.forEach((route, index) => {
+      if (!animatedValues[route.key]) {
+        animatedValues[route.key] = new Animated.Value(index === state.index ? 1 : 0);
+      }
+
+      Animated.spring(animatedValues[route.key], {
+        toValue: index === state.index ? 1 : 0,
+        useNativeDriver: true,
+        stiffness: 210,
+        damping: 20,
+        mass: 0.8,
+      }).start();
+    });
+  }, [animatedValues, state.index, state.routes]);
+
+  const containerStyle = useMemo<ViewStyle>(
+    () => ({
+      paddingBottom: Math.max(insets.bottom, spacing.sm),
+      backgroundColor: "transparent",
+    }),
+    [insets.bottom]
+  );
+
   return (
-    <View style={[styles.iconContainer, isFocused && styles.iconContainerFocused]}>
-      <Icon 
-        color={color} 
-        size={22} 
-        strokeWidth={isFocused ? 2.5 : 2}
-      />
-      {isFocused && (
-        <View style={[styles.activeDot, { backgroundColor: color }]} />
-      )}
+    <View style={[styles.outerContainer, containerStyle]} pointerEvents="box-none">
+      <BlurView intensity={isDark ? 38 : 55} tint={isDark ? "dark" : "light"} style={styles.blurShell}>
+        <LinearGradient
+          colors={
+            isDark
+              ? ["rgba(17,24,39,0.88)", "rgba(15,23,42,0.7)"]
+              : ["rgba(255,255,255,0.92)", "rgba(248,250,252,0.8)"]
+          }
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.gradientShell, { borderColor: colors.border }]}
+        >
+          {state.routes.map((route, index) => {
+            const tabRouteName = route.name as TabRouteName;
+            const descriptor = descriptors[route.key];
+            const options = descriptor.options;
+            const isFocused = state.index === index;
+            const label = getTabLabel(options, route.name);
+
+            const onPress = () => {
+              const event = navigation.emit({
+                type: "tabPress",
+                target: route.key,
+                canPreventDefault: true,
+              });
+
+              if (!isFocused && !event.defaultPrevented) {
+                navigation.navigate(route.name, route.params);
+              }
+            };
+
+            const onLongPress = () => {
+              navigation.emit({
+                type: "tabLongPress",
+                target: route.key,
+              });
+            };
+
+            const badgeText =
+              tabRouteName === "index" && currentParking
+                ? "Live"
+                : tabRouteName === "settings" && isAutoDetectionEnabled && savedBluetoothDevice
+                  ? "Auto"
+                  : undefined;
+
+            const tabAnim = animatedValues[route.key] ?? new Animated.Value(isFocused ? 1 : 0);
+            const Icon = TAB_ICON_MAP[tabRouteName] ?? Home;
+
+            return (
+              <TouchableOpacity
+                key={route.key}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isFocused }}
+                accessibilityLabel={options.tabBarAccessibilityLabel ?? `${label} tab`}
+                accessibilityHint={`Navigates to ${label}`}
+                testID={options.tabBarButtonTestID}
+                onPress={onPress}
+                onLongPress={onLongPress}
+                activeOpacity={0.9}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.tabButton}
+              >
+                <Animated.View
+                  style={[
+                    styles.activePill,
+                    {
+                      backgroundColor: isDark ? "rgba(99,102,241,0.26)" : "rgba(79,70,229,0.14)",
+                      borderColor: isDark ? "rgba(129,140,248,0.45)" : "rgba(99,102,241,0.28)",
+                      opacity: tabAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
+                      transform: [
+                        {
+                          scaleX: tabAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
+                        },
+                        {
+                          scaleY: tabAnim.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }),
+                        },
+                      ],
+                    },
+                  ]}
+                />
+
+                <Animated.View
+                  style={{
+                    transform: [
+                      {
+                        scale: tabAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] }),
+                      },
+                    ],
+                  }}
+                >
+                  <Icon
+                    color={isFocused ? colors.accent : colors.textMuted}
+                    size={21}
+                    strokeWidth={isFocused ? 2.55 : 2.1}
+                  />
+                </Animated.View>
+
+                {badgeText ? (
+                  <View
+                    style={[
+                      styles.contextBadge,
+                      {
+                        backgroundColor: tabRouteName === "index" ? colors.accent : colors.success,
+                      },
+                    ]}
+                  >
+                    {tabRouteName === "settings" ? <Bluetooth size={10} color="#fff" strokeWidth={2.2} /> : null}
+                    <Text style={styles.contextBadgeText}>{badgeText}</Text>
+                  </View>
+                ) : null}
+
+                <Animated.Text
+                  style={[
+                    styles.tabLabel,
+                    {
+                      color: isFocused ? colors.text : colors.textMuted,
+                      opacity: tabAnim.interpolate({ inputRange: [0, 1], outputRange: [0.72, 1] }),
+                      transform: [
+                        {
+                          translateY: tabAnim.interpolate({ inputRange: [0, 1], outputRange: [2, 0] }),
+                        },
+                      ],
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {label}
+                </Animated.Text>
+              </TouchableOpacity>
+            );
+          })}
+        </LinearGradient>
+      </BlurView>
     </View>
   );
 }
 
 export default function TabLayout() {
-  const theme = useTheme();
-  const isDark = theme?.isDark ?? false;
-  const colors = isDark ? Colors.dark : Colors.light;
-  const insets = useSafeAreaInsets();
-
-  const tabBarBaseHeight = 84;
-  const tabBarTopPadding = 8;
-  const minimumBottomPadding = 10;
-
   return (
     <Tabs
-      screenOptions={({ route }) => ({
+      tabBar={(props) => <CustomTabBar {...props} />}
+      screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: colors.card,
-          position: "absolute",
-          borderTopWidth: StyleSheet.hairlineWidth,
-          borderTopColor: colors.border,
-          elevation: 0,
-          shadowColor: colors.shadow,
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.1,
-          shadowRadius: 12,
-          height: tabBarBaseHeight + insets.bottom,
-          paddingTop: tabBarTopPadding,
-          paddingBottom: Math.max(insets.bottom, minimumBottomPadding),
+          display: "none",
         },
-        tabBarItemStyle: {
-          justifyContent: 'center',
-          alignItems: 'center',
-        },
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-          marginTop: 4,
-        },
-        tabBarIcon: ({ color, focused }) => {
-          let Icon = Home;
-          if (route.name === "index") Icon = Home;
-          else if (route.name === "map") Icon = Compass;
-          else if (route.name === "history") Icon = Clock;
-          else if (route.name === "settings") Icon = Settings;
-
-          return <TabIcon Icon={Icon} color={color} isFocused={focused} />;
-        },
-      })}
+      }}
     >
       <Tabs.Screen
         name="index"
@@ -109,20 +245,66 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  iconContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 8,
-    borderRadius: 16,
-    minWidth: 44,
+  outerContainer: {
+    position: "absolute",
+    left: spacing.md,
+    right: spacing.md,
+    bottom: 0,
   },
-  iconContainerFocused: {
-    transform: [{ scale: 1.05 }],
+  blurShell: {
+    borderRadius: radius.xl,
+    overflow: "hidden",
   },
-  activeDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    marginTop: 4,
+  gradientShell: {
+    minHeight: 84,
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.xs,
+    borderRadius: radius.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    shadowColor: "#020617",
+    ...elevation.lg,
+  },
+  tabButton: {
+    flex: 1,
+    minHeight: 52,
+    maxWidth: 108,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xxs,
+  },
+  activePill: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  tabLabel: {
+    ...typography.caption,
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  contextBadge: {
+    position: "absolute",
+    top: 2,
+    right: 12,
+    minHeight: 18,
+    borderRadius: radius.pill,
+    paddingHorizontal: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 3,
+  },
+  contextBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
 });
