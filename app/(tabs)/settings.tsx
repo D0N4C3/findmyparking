@@ -46,6 +46,13 @@ import { useDialog } from '@/context/DialogContext';
 import { DIALOG_COPY } from '@/constants/dialogs';
 import { BluetoothDevicePickerSheet } from '@/components/bluetooth/BluetoothDevicePickerSheet';
 import { clearSkippedBluetoothSetup, getOnboardingState } from '@/services/onboarding';
+import {
+  BluetoothMonitorRuntime,
+  getBluetoothMonitorRuntime,
+  startBluetoothAutoDetectionMonitor,
+  stopBluetoothAutoDetectionMonitor,
+  subscribeToBluetoothMonitorRuntime,
+} from '@/services/bluetooth';
 
 interface SettingItemProps {
   icon: React.ReactNode;
@@ -151,6 +158,7 @@ export default function SettingsScreen() {
   const [zoneName, setZoneName] = useState('');
   const [isBluetoothModalVisible, setIsBluetoothModalVisible] = useState(false);
   const [shouldShowSkippedPrompt, setShouldShowSkippedPrompt] = useState(false);
+  const [monitorRuntime, setMonitorRuntime] = useState<BluetoothMonitorRuntime | null>(null);
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -308,6 +316,67 @@ export default function SettingsScreen() {
 
   const locationStatus: PermissionBadgeStatus = permissionStatuses.location.foreground;
 
+  const formatTimestamp = useCallback((timestamp: number | null | undefined) => {
+    if (!timestamp) return '—';
+    return new Date(timestamp).toLocaleString();
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadRuntime = async () => {
+      const runtime = await getBluetoothMonitorRuntime();
+      if (mounted) {
+        setMonitorRuntime(runtime);
+      }
+    };
+
+    void loadRuntime();
+    const unsubscribe = subscribeToBluetoothMonitorRuntime((runtime) => {
+      if (mounted) {
+        setMonitorRuntime(runtime);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isAutoDetectionEnabled || !savedBluetoothDevice) {
+      stopBluetoothAutoDetectionMonitor();
+      return;
+    }
+
+    void startBluetoothAutoDetectionMonitor(savedBluetoothDevice.id);
+
+    return () => {
+      stopBluetoothAutoDetectionMonitor();
+    };
+  }, [isAutoDetectionEnabled, savedBluetoothDevice]);
+
+  const monitorStatusLabel = useMemo(() => {
+    if (!monitorRuntime) return 'Loading monitor status…';
+
+    switch (monitorRuntime.status) {
+      case 'inactive':
+        return 'Inactive';
+      case 'starting':
+        return 'Starting';
+      case 'monitoring':
+        return monitorRuntime.isSubscribedToDisconnect
+          ? 'Monitoring disconnect events'
+          : 'Monitoring (subscription pending)';
+      case 'disconnected':
+        return 'Disconnect detected';
+      case 'error':
+        return 'Monitor error';
+      default:
+        return 'Unknown';
+    }
+  }, [monitorRuntime]);
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
@@ -438,6 +507,24 @@ export default function SettingsScreen() {
                 trackColor={{ false: colors.surfaceSecondary, true: colors.accent + '50' }}
                 thumbColor={isAutoDetectionEnabled ? colors.accent : colors.textMuted}
               />
+            </AppCard>
+
+            <AppCard colors={colors} style={styles.switchItem} elevated="none">
+              <View style={{ gap: 4 }}>
+                <Text style={[styles.itemTitle, { color: colors.text }]}>Auto-detection monitor</Text>
+                <Text style={[styles.itemSubtitle, { color: colors.textMuted }]}>
+                  Runtime: {monitorStatusLabel}
+                </Text>
+                <Text style={[styles.itemSubtitle, { color: colors.textMuted }]}>
+                  Device: {monitorRuntime?.selectedDeviceId ?? '—'}
+                </Text>
+                <Text style={[styles.itemSubtitle, { color: colors.textMuted }]}>
+                  Last successful heartbeat: {formatTimestamp(monitorRuntime?.lastHeartbeatAt)}
+                </Text>
+                {monitorRuntime?.message ? (
+                  <Text style={[styles.itemSubtitle, { color: colors.textMuted }]}>{monitorRuntime.message}</Text>
+                ) : null}
+              </View>
             </AppCard>
           </View>
 
