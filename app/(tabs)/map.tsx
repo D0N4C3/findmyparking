@@ -13,6 +13,8 @@ import {
   Linking,
   Share,
   ActivityIndicator,
+  useWindowDimensions,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -55,6 +57,8 @@ type Coordinates = {
   latitude: number;
   longitude: number;
 };
+
+type SheetState = 'hidden' | 'collapsed' | 'expanded';
 
 const DEFAULT_REGION = {
   latitude: 37.7749,
@@ -161,6 +165,7 @@ export default function MapScreen() {
   const colors = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
+  const { height: viewportHeight } = useWindowDimensions();
   const mapRef = useRef<MapView>(null);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
@@ -169,7 +174,7 @@ export default function MapScreen() {
   const [routeCoordinates, setRouteCoordinates] = useState<Coordinates[]>([]);
   const [routeMeta, setRouteMeta] = useState<RouteMeta>({ mode: 'osrm', totalDistance: null, etaMinutes: null });
   const [isPinDropMode, setIsPinDropMode] = useState(false);
-  const [isSheetHidden, setIsSheetHidden] = useState(false);
+  const [sheetState, setSheetState] = useState<SheetState>('expanded');
 
   const distance = getDistanceToCar();
   const walkingTime = getWalkingTimeToCar();
@@ -457,6 +462,16 @@ export default function MapScreen() {
     () => navigationSteps.slice(safeStepIndex).reduce((sum, step) => sum + step.distance, 0),
     [navigationSteps, safeStepIndex],
   );
+  const isSmallScreen = viewportHeight < 740;
+  const sheetContentMaxHeight = Math.round(viewportHeight * (isSmallScreen ? 0.7 : 0.62));
+  const sheetBottomOffset = tabBarHeight;
+  const sheetSafeBottomPadding = Math.max(insets.bottom, 12);
+  const isSheetHidden = sheetState === 'hidden';
+  const isSheetCollapsed = sheetState === 'collapsed';
+  const isSheetExpanded = sheetState === 'expanded';
+  const cycleSheetState = useCallback(() => {
+    setSheetState((prev) => (prev === 'hidden' ? 'collapsed' : prev === 'collapsed' ? 'expanded' : 'collapsed'));
+  }, []);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -558,11 +573,13 @@ export default function MapScreen() {
 
       <View pointerEvents={isSheetHidden ? 'box-none' : 'auto'} style={styles.sheetContainer}>
         <Pressable
-          style={[styles.sheetToggle, { backgroundColor: colors.card, bottom: tabBarHeight + Math.max(insets.bottom, 10) }]}
-          onPress={() => setIsSheetHidden((prev) => !prev)}
+          style={[styles.sheetToggle, { backgroundColor: colors.card, bottom: sheetBottomOffset + 10 }]}
+          onPress={() => setSheetState((prev) => (prev === 'hidden' ? 'collapsed' : 'hidden'))}
         >
           {isSheetHidden ? <Eye size={16} color={colors.text} /> : <EyeOff size={16} color={colors.text} />}
-          <Text style={[styles.sheetToggleLabel, { color: colors.text }]}>{isSheetHidden ? 'Show controls' : 'Hide controls'}</Text>
+          <Text style={[styles.sheetToggleLabel, { color: colors.text }]}>
+            {isSheetHidden ? 'Show controls' : 'Hide controls'}
+          </Text>
         </Pressable>
 
         {!isSheetHidden && (
@@ -572,144 +589,169 @@ export default function MapScreen() {
               {
                 backgroundColor: colors.card,
                 borderTopColor: colors.border,
-                paddingBottom: tabBarHeight + Math.max(insets.bottom, 12),
+                bottom: sheetBottomOffset,
+                maxHeight: sheetContentMaxHeight,
               },
             ]}
           >
-            <View style={styles.dragHandleWrap}>
+            <Pressable style={styles.dragHandleWrap} onPress={cycleSheetState}>
               <View style={[styles.dragHandle, { backgroundColor: colors.textMuted }]} />
-            </View>
-
-        <View style={styles.metricsRow}>
-          <View style={[styles.metricCard, { backgroundColor: colors.surfaceSecondary }]}>
-            <LocateFixed size={16} color={colors.accent} />
-            <Text style={[styles.metricValue, { color: colors.text }]}>{formatDistance(distance)}</Text>
-            <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Distance</Text>
-          </View>
-
-          <View style={[styles.metricCard, { backgroundColor: colors.surfaceSecondary }]}>
-            <Timer size={16} color={colors.accent} />
-            <Text style={[styles.metricValue, { color: colors.text }]}>{walkingTime != null ? `${walkingTime} min` : '--'}</Text>
-            <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Walk ETA</Text>
-          </View>
-
-          <View style={[styles.metricCard, { backgroundColor: colors.surfaceSecondary }]}>
-            <MapPinned size={16} color={colors.accent} />
-            <Text style={[styles.metricValue, { color: colors.text }]} numberOfLines={1}>{currentParking?.address ? 'Saved' : 'No pin'}</Text>
-            <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Parking</Text>
-          </View>
-        </View>
-
-        {(routeMeta.totalDistance != null || routeMeta.etaMinutes != null) && (
-          <View style={styles.chipsRow}>
-            <View style={[styles.metaChip, { backgroundColor: colors.surfaceSecondary }]}>
-              <Text style={[styles.metaChipLabel, { color: colors.textSecondary }]}>Route</Text>
-              <Text style={[styles.metaChipValue, { color: colors.text }]}>
-                {routeMeta.mode === 'osrm' ? 'OSRM walk route' : 'Direct guidance'}
+              <Text style={[styles.dragHandleLabel, { color: colors.textSecondary }]}>
+                {isSheetExpanded ? 'Tap to collapse' : 'Tap to expand'}
               </Text>
-            </View>
-            <View style={[styles.metaChip, { backgroundColor: colors.surfaceSecondary }]}>
-              <Text style={[styles.metaChipLabel, { color: colors.textSecondary }]}>Distance</Text>
-              <Text style={[styles.metaChipValue, { color: colors.text }]}>{formatDistance(routeMeta.totalDistance)}</Text>
-            </View>
-            <View style={[styles.metaChip, { backgroundColor: colors.surfaceSecondary }]}>
-              <Text style={[styles.metaChipLabel, { color: colors.textSecondary }]}>ETA</Text>
-              <Text style={[styles.metaChipValue, { color: colors.text }]}>{formatEta(routeMeta.etaMinutes)}</Text>
-            </View>
-          </View>
-        )}
+            </Pressable>
 
-        {activeStep && (
-          <View style={[styles.stepCard, { backgroundColor: colors.surfaceSecondary }]}> 
-            <Route size={16} color={colors.accent} />
-            <View style={styles.stepTextWrap}>
-              <Text style={[styles.stepProgressLabel, { color: colors.textSecondary }]}>
-                Step {safeStepIndex + 1} of {navigationSteps.length}
-              </Text>
-              <Text style={[styles.stepTitle, { color: colors.text }]} numberOfLines={2}>{activeStep.instruction}</Text>
-              <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-                {formatDistance(activeStep.distance)} now • {formatDistance(remainingDistance)} remaining
-              </Text>
-              {nextStep ? (
-                <Text style={[styles.stepUpcoming, { color: colors.textSecondary }]} numberOfLines={2}>
-                  Next: {nextStep.instruction} ({formatDistance(nextStep.distance)})
-                </Text>
+            <View
+              style={[
+                styles.sheetBody,
+                {
+                  paddingBottom: sheetSafeBottomPadding,
+                },
+              ]}
+            >
+              <View style={styles.metricsRow}>
+                <View style={[styles.metricCard, { backgroundColor: colors.surfaceSecondary }]}>
+                  <LocateFixed size={16} color={colors.accent} />
+                  <Text style={[styles.metricValue, { color: colors.text }]}>{formatDistance(distance)}</Text>
+                  <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Distance</Text>
+                </View>
+
+                <View style={[styles.metricCard, { backgroundColor: colors.surfaceSecondary }]}>
+                  <Timer size={16} color={colors.accent} />
+                  <Text style={[styles.metricValue, { color: colors.text }]}>{walkingTime != null ? `${walkingTime} min` : '--'}</Text>
+                  <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Walk ETA</Text>
+                </View>
+
+                <View style={[styles.metricCard, { backgroundColor: colors.surfaceSecondary }]}>
+                  <MapPinned size={16} color={colors.accent} />
+                  <Text style={[styles.metricValue, { color: colors.text }]} numberOfLines={1}>{currentParking?.address ? 'Saved' : 'No pin'}</Text>
+                  <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Parking</Text>
+                </View>
+              </View>
+
+              {isSheetCollapsed ? (
+                <TouchableOpacity style={[styles.expandButton, { backgroundColor: colors.surfaceSecondary }]} onPress={cycleSheetState}>
+                  <Text style={[styles.expandButtonLabel, { color: colors.text }]}>Show full actions</Text>
+                </TouchableOpacity>
               ) : (
-                <Text style={[styles.stepUpcoming, { color: colors.textSecondary }]} numberOfLines={1}>
-                  Final segment to your car
-                </Text>
+                <ScrollView
+                  style={styles.expandedScroll}
+                  contentContainerStyle={styles.expandedContent}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {(routeMeta.totalDistance != null || routeMeta.etaMinutes != null) && (
+                    <View style={styles.chipsRow}>
+                      <View style={[styles.metaChip, { backgroundColor: colors.surfaceSecondary }]}>
+                        <Text style={[styles.metaChipLabel, { color: colors.textSecondary }]}>Route</Text>
+                        <Text style={[styles.metaChipValue, { color: colors.text }]}>
+                          {routeMeta.mode === 'osrm' ? 'OSRM walk route' : 'Direct guidance'}
+                        </Text>
+                      </View>
+                      <View style={[styles.metaChip, { backgroundColor: colors.surfaceSecondary }]}>
+                        <Text style={[styles.metaChipLabel, { color: colors.textSecondary }]}>Distance</Text>
+                        <Text style={[styles.metaChipValue, { color: colors.text }]}>{formatDistance(routeMeta.totalDistance)}</Text>
+                      </View>
+                      <View style={[styles.metaChip, { backgroundColor: colors.surfaceSecondary }]}>
+                        <Text style={[styles.metaChipLabel, { color: colors.textSecondary }]}>ETA</Text>
+                        <Text style={[styles.metaChipValue, { color: colors.text }]}>{formatEta(routeMeta.etaMinutes)}</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {activeStep && (
+                    <View style={[styles.stepCard, { backgroundColor: colors.surfaceSecondary }]}> 
+                      <Route size={16} color={colors.accent} />
+                      <View style={styles.stepTextWrap}>
+                        <Text style={[styles.stepProgressLabel, { color: colors.textSecondary }]}>
+                          Step {safeStepIndex + 1} of {navigationSteps.length}
+                        </Text>
+                        <Text style={[styles.stepTitle, { color: colors.text }]} numberOfLines={2}>{activeStep.instruction}</Text>
+                        <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
+                          {formatDistance(activeStep.distance)} now • {formatDistance(remainingDistance)} remaining
+                        </Text>
+                        {nextStep ? (
+                          <Text style={[styles.stepUpcoming, { color: colors.textSecondary }]} numberOfLines={2}>
+                            Next: {nextStep.instruction} ({formatDistance(nextStep.distance)})
+                          </Text>
+                        ) : (
+                          <Text style={[styles.stepUpcoming, { color: colors.textSecondary }]} numberOfLines={1}>
+                            Final segment to your car
+                          </Text>
+                        )}
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.stepAdvance, { backgroundColor: colors.accent }]}
+                        onPress={() => setCurrentStepIndex((prev) => Math.min(prev + 1, navigationSteps.length - 1))}
+                        disabled={safeStepIndex >= navigationSteps.length - 1}
+                      >
+                        <Text style={[styles.stepAdvanceLabel, { color: colors.textOnAccent }]}>Next</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  <View style={styles.actionsRow}>
+                    <TouchableOpacity style={[styles.secondaryAction, { backgroundColor: colors.surfaceSecondary }]} onPress={openExternalMaps}>
+                      <Navigation size={17} color={colors.text} />
+                      <Text style={[styles.secondaryActionLabel, { color: colors.text }]}>Open Maps</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={[styles.primaryAction, { backgroundColor: colors.accent }]} onPress={() => void buildNavigation()} disabled={isLoadingRoute || !resolvedNavigationTarget}>
+                      {isLoadingRoute ? (
+                        <ActivityIndicator size="small" color={colors.textOnAccent} />
+                      ) : (
+                        <Route size={18} color={colors.textOnAccent} />
+                      )}
+                      <Text style={[styles.primaryActionLabel, { color: colors.textOnAccent }]}>{isLoadingRoute ? 'Building...' : 'Start Walk Route'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.targetList}>
+                    {quickNavigationPresets.slice(0, 2).map((preset) => (
+                      <TouchableOpacity
+                        key={preset.id}
+                        style={[styles.targetChip, { backgroundColor: colors.surfaceSecondary }]}
+                        onPress={() =>
+                          setNavigationTarget({
+                            kind: 'quick-preset',
+                            presetId: preset.id,
+                            latitude: preset.destination.latitude,
+                            longitude: preset.destination.longitude,
+                            label: preset.label,
+                          })
+                        }
+                      >
+                        <Text style={[styles.targetChipText, { color: colors.text }]} numberOfLines={1}>Preset: {preset.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                    {offlineParkingZones.slice(0, 2).map((zone) => (
+                      <TouchableOpacity
+                        key={zone.id}
+                        style={[styles.targetChip, { backgroundColor: colors.surfaceSecondary }]}
+                        onPress={() =>
+                          setNavigationTarget({
+                            kind: 'offline-zone',
+                            zoneId: zone.id,
+                            latitude: zone.center.latitude,
+                            longitude: zone.center.longitude,
+                            label: zone.name,
+                          })
+                        }
+                      >
+                        <Text style={[styles.targetChipText, { color: colors.text }]} numberOfLines={1}>Zone: {zone.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.endSessionAction, { backgroundColor: colors.surfaceSecondary }]}
+                    onPress={handleEndSession}
+                    disabled={!currentParking}
+                  >
+                    <XCircle size={17} color={currentParking ? colors.error : colors.textMuted} />
+                    <Text style={[styles.endSessionLabel, { color: currentParking ? colors.error : colors.textMuted }]}>End Session</Text>
+                  </TouchableOpacity>
+                </ScrollView>
               )}
             </View>
-            <TouchableOpacity
-              style={[styles.stepAdvance, { backgroundColor: colors.accent }]}
-              onPress={() => setCurrentStepIndex((prev) => Math.min(prev + 1, navigationSteps.length - 1))}
-              disabled={safeStepIndex >= navigationSteps.length - 1}
-            >
-              <Text style={[styles.stepAdvanceLabel, { color: colors.textOnAccent }]}>Next</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <View style={styles.actionsRow}>
-          <TouchableOpacity style={[styles.secondaryAction, { backgroundColor: colors.surfaceSecondary }]} onPress={openExternalMaps}>
-            <Navigation size={17} color={colors.text} />
-            <Text style={[styles.secondaryActionLabel, { color: colors.text }]}>Open Maps</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={[styles.primaryAction, { backgroundColor: colors.accent }]} onPress={() => void buildNavigation()} disabled={isLoadingRoute || !resolvedNavigationTarget}>
-            {isLoadingRoute ? (
-              <ActivityIndicator size="small" color={colors.textOnAccent} />
-            ) : (
-              <Route size={18} color={colors.textOnAccent} />
-            )}
-            <Text style={[styles.primaryActionLabel, { color: colors.textOnAccent }]}>{isLoadingRoute ? 'Building...' : 'Start Walk Route'}</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.targetList}>
-          {quickNavigationPresets.slice(0, 2).map((preset) => (
-            <TouchableOpacity
-              key={preset.id}
-              style={[styles.targetChip, { backgroundColor: colors.surfaceSecondary }]}
-              onPress={() =>
-                setNavigationTarget({
-                  kind: 'quick-preset',
-                  presetId: preset.id,
-                  latitude: preset.destination.latitude,
-                  longitude: preset.destination.longitude,
-                  label: preset.label,
-                })
-              }
-            >
-              <Text style={[styles.targetChipText, { color: colors.text }]} numberOfLines={1}>Preset: {preset.label}</Text>
-            </TouchableOpacity>
-          ))}
-          {offlineParkingZones.slice(0, 2).map((zone) => (
-            <TouchableOpacity
-              key={zone.id}
-              style={[styles.targetChip, { backgroundColor: colors.surfaceSecondary }]}
-              onPress={() =>
-                setNavigationTarget({
-                  kind: 'offline-zone',
-                  zoneId: zone.id,
-                  latitude: zone.center.latitude,
-                  longitude: zone.center.longitude,
-                  label: zone.name,
-                })
-              }
-            >
-              <Text style={[styles.targetChipText, { color: colors.text }]} numberOfLines={1}>Zone: {zone.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <TouchableOpacity
-          style={[styles.endSessionAction, { backgroundColor: colors.surfaceSecondary }]}
-          onPress={handleEndSession}
-          disabled={!currentParking}
-        >
-          <XCircle size={17} color={currentParking ? colors.error : colors.textMuted} />
-          <Text style={[styles.endSessionLabel, { color: currentParking ? colors.error : colors.textMuted }]}>End Session</Text>
-        </TouchableOpacity>
           </View>
         )}
       </View>
@@ -841,20 +883,21 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 0,
     borderTopWidth: 1,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 16,
     paddingTop: 8,
-    gap: 12,
-    minHeight: 300,
-    maxHeight: '56%',
   },
   dragHandleWrap: {
     alignItems: 'center',
     paddingTop: 4,
     paddingBottom: 6,
+  },
+  dragHandleLabel: {
+    marginTop: 6,
+    fontSize: 11,
+    fontWeight: '600',
   },
   dragHandle: {
     width: 44,
@@ -865,6 +908,26 @@ const styles = StyleSheet.create({
   metricsRow: {
     flexDirection: 'row',
     gap: 8,
+  },
+  sheetBody: {
+    gap: 12,
+  },
+  expandedScroll: {
+    maxHeight: '100%',
+  },
+  expandedContent: {
+    gap: 12,
+  },
+  expandButton: {
+    marginTop: 2,
+    borderRadius: 10,
+    minHeight: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  expandButtonLabel: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   metricCard: {
     flex: 1,
