@@ -385,7 +385,7 @@ export default function SettingsScreen() {
               icon={<Bluetooth size={22} color={colors.accent} />}
               title="Bluetooth Auto-Detection"
               subtitle={savedBluetoothDevice 
-                ? `Connected to ${savedBluetoothDevice.name}` 
+                ? `Selected device: ${savedBluetoothDevice.name}` 
                 : 'No device selected'}
               onPress={handleSelectBluetoothDevice}
               colors={colors}
@@ -722,6 +722,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    gap: 12,
   },
   badge: {
     paddingHorizontal: 10,
