@@ -80,6 +80,10 @@ const STORAGE_KEYS = {
   permissionAsked: '@parkping/permission_asked',
 };
 
+function createParkingSpotId() {
+  return `park-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export const [ParkingProvider, useParking] = createContextHook<ParkingContextType>(() => {
   const { showError } = useDialog();
   const [currentParking, setCurrentParking] = useState<ParkingSpot | null>(null);
@@ -320,7 +324,7 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
       }
 
       const newParking: ParkingSpot = {
-        id: Date.now().toString(),
+        id: createParkingSpotId(),
         latitude: coords.latitude,
         longitude: coords.longitude,
         timestamp: Date.now(),

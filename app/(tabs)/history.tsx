@@ -241,7 +241,7 @@ function FilterModal({ visible, onClose, selectedFilter, onSelectFilter, colors 
 }
 
 export default function HistoryScreen() {
-  const { parkingHistory, currentParking, deleteParkingSpot, clearHistory, updateParkingSpot } = useParking();
+  const { parkingHistory, currentParking, deleteParkingSpot, clearHistory } = useParking();
   const theme = useTheme();
   const isDark = theme?.isDark ?? false;
   const colors = isDark ? Colors.dark : Colors.light;
@@ -313,10 +313,16 @@ export default function HistoryScreen() {
 
   const handleItemPress = useCallback((spot: ParkingSpot) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Set as current parking
-    updateParkingSpot(spot.id, { ...spot });
-    router.push('/map');
-  }, [router, updateParkingSpot]);
+    if (currentParking?.id === spot.id) {
+      router.push('/map');
+      return;
+    }
+
+    router.push({
+      pathname: '/history/[id]',
+      params: { id: spot.id },
+    });
+  }, [currentParking?.id, router]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -414,7 +420,7 @@ export default function HistoryScreen() {
           >
             {filteredSpots.map((spot) => (
               <HistoryItem
-                key={spot.id}
+                key={`${spot.id}-${spot.timestamp}`}
                 spot={spot}
                 onDelete={handleDelete}
                 onPress={handleItemPress}
