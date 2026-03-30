@@ -153,10 +153,16 @@ export default function MapScreen() {
     currentLocation,
     getDistanceToCar,
     getWalkingTimeToCar,
+    saveParkingLocation,
+    addQuickNavigationPreset,
     endParkingSession,
     quickNavigationPresets,
     offlineParkingZones,
+    manualDestination,
     navigationTarget,
+    createManualDestination,
+    updateManualDestination,
+    removeManualDestination,
     setNavigationTarget,
   } = useParking();
   const { showError, showDestructive } = useDialog();
@@ -316,6 +322,7 @@ export default function MapScreen() {
       label: 'My parked car',
     };
   }, [currentParking, navigationTarget]);
+  const activeTargetSource = resolvedNavigationTarget?.kind === 'manual-pin' ? 'Manual Pin' : 'Car';
 
   const buildNavigation = useCallback(async () => {
     if (!resolvedNavigationTarget) {
@@ -395,6 +402,27 @@ export default function MapScreen() {
       setIsLoadingRoute(false);
     }
   }, [resolvedNavigationTarget, currentLocation, fetchRoute, showError, walkingTime]);
+
+  const saveManualAsQuickDestination = useCallback(async () => {
+    if (!manualDestination) return;
+    await addQuickNavigationPreset({
+      label: manualDestination.label,
+      destination: {
+        latitude: manualDestination.latitude,
+        longitude: manualDestination.longitude,
+      },
+      mode: 'walking',
+    });
+  }, [addQuickNavigationPreset, manualDestination]);
+
+  const applyManualAsParkingTarget = useCallback(async () => {
+    if (!manualDestination) return;
+    await saveParkingLocation({
+      latitude: manualDestination.latitude,
+      longitude: manualDestination.longitude,
+    });
+    setNavigationTarget(null);
+  }, [manualDestination, saveParkingLocation, setNavigationTarget]);
 
   const openExternalMaps = useCallback(() => {
     const target = resolvedNavigationTarget
@@ -487,12 +515,27 @@ export default function MapScreen() {
         onPress={(event) => {
           if (!isPinDropMode) return;
           const coordinate = event.nativeEvent.coordinate;
-          setNavigationTarget({
+          const nextTarget = {
             kind: 'manual-pin',
+            destinationId: manualDestination?.id ?? `manual-${Date.now()}`,
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
             label: 'Manual pin',
-          });
+          } as const;
+          if (manualDestination) {
+            void updateManualDestination({
+              latitude: coordinate.latitude,
+              longitude: coordinate.longitude,
+              label: 'Manual pin',
+            });
+          } else {
+            void createManualDestination({
+              latitude: coordinate.latitude,
+              longitude: coordinate.longitude,
+              label: 'Manual pin',
+            });
+          }
+          setNavigationTarget(nextTarget);
           setIsPinDropMode(false);
           void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }}
@@ -515,8 +558,8 @@ export default function MapScreen() {
           />
         )}
 
-        {resolvedNavigationTarget?.kind === 'manual-pin' && (
-          <Marker coordinate={{ latitude: resolvedNavigationTarget.latitude, longitude: resolvedNavigationTarget.longitude }} title="Manual pin" description="Custom navigation target">
+        {manualDestination && (
+          <Marker coordinate={{ latitude: manualDestination.latitude, longitude: manualDestination.longitude }} title="Manual pin" description="Custom navigation target">
             <View style={[styles.manualPin, { backgroundColor: colors.warning }]}>
               <Pin size={14} color="#fff" />
             </View>
@@ -647,7 +690,11 @@ export default function MapScreen() {
                           {routeMeta.mode === 'osrm' ? 'OSRM walk route' : 'Direct guidance'}
                         </Text>
                       </View>
-                      <View style={[styles.metaChip, { backgroundColor: colors.surfaceSecondary }]}>
+                    <View style={[styles.metaChip, { backgroundColor: colors.surfaceSecondary }]}>
+                      <Text style={[styles.metaChipLabel, { color: colors.textSecondary }]}>Target Source</Text>
+                      <Text style={[styles.metaChipValue, { color: colors.text }]}>{activeTargetSource}</Text>
+                    </View>
+                    <View style={[styles.metaChip, { backgroundColor: colors.surfaceSecondary }]}>
                         <Text style={[styles.metaChipLabel, { color: colors.textSecondary }]}>Distance</Text>
                         <Text style={[styles.metaChipValue, { color: colors.text }]}>{formatDistance(routeMeta.totalDistance)}</Text>
                       </View>
@@ -704,6 +751,22 @@ export default function MapScreen() {
                       <Text style={[styles.primaryActionLabel, { color: colors.textOnAccent }]}>{isLoadingRoute ? 'Building...' : 'Start Walk Route'}</Text>
                     </TouchableOpacity>
                   </View>
+                  {manualDestination && (
+                    <View style={styles.targetList}>
+                      <TouchableOpacity style={[styles.secondaryAction, { backgroundColor: colors.surfaceSecondary }]} onPress={() => void saveManualAsQuickDestination()}>
+                        <MapPinned size={16} color={colors.text} />
+                        <Text style={[styles.secondaryActionLabel, { color: colors.text }]}>Set as quick destination</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.secondaryAction, { backgroundColor: colors.surfaceSecondary }]} onPress={() => void applyManualAsParkingTarget()}>
+                        <Car size={16} color={colors.text} />
+                        <Text style={[styles.secondaryActionLabel, { color: colors.text }]}>Use as parking target</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.secondaryAction, { backgroundColor: colors.surfaceSecondary }]} onPress={() => void removeManualDestination()}>
+                        <XCircle size={16} color={colors.error} />
+                        <Text style={[styles.secondaryActionLabel, { color: colors.error }]}>Clear pin</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                   <View style={styles.targetList}>
                     {quickNavigationPresets.slice(0, 2).map((preset) => (
                       <TouchableOpacity
