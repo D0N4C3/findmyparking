@@ -188,7 +188,11 @@ export default function MapScreen() {
   const isExpoGo = Constants.appOwnership === 'expo';
 
   const shouldUseGoogleProvider =
-    Platform.OS === 'android' || (Platform.OS === 'ios' && !isExpoGo && keys.iosDetected);
+    Platform.OS === 'android'
+      ? !isExpoGo && keys.androidDetected
+      : Platform.OS === 'ios'
+        ? !isExpoGo && keys.iosDetected
+        : false;
 
   const needsMapSetup =
     Platform.OS === 'android'
