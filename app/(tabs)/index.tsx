@@ -76,8 +76,8 @@ function TimerModal({ visible, onClose, onSetTimer, colors }: TimerModalProps) {
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}> 
-        <View style={[styles.modalContent, { backgroundColor: colors.card, marginBottom: Math.max(insets.bottom, 12) }]}> 
+      <View style={[styles.modalOverlay, { backgroundColor: colors.overlay, paddingBottom: Math.max(insets.bottom, 12) }]}> 
+        <View style={[styles.modalContent, { backgroundColor: colors.card }]}> 
           <View style={styles.modalHeader}>
             <Timer size={24} color={colors.accent} />
             <Text style={[styles.modalTitle, { color: colors.text }]}>Set Parking Timer</Text>
@@ -138,8 +138,8 @@ function NoteModal({ visible, onClose, onSave, initialNote, colors }: NoteModalP
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}> 
-        <View style={[styles.modalContent, { backgroundColor: colors.card, marginBottom: Math.max(insets.bottom, 12) }]}> 
+      <View style={[styles.modalOverlay, { backgroundColor: colors.overlay, paddingBottom: Math.max(insets.bottom, 12) }]}> 
+        <View style={[styles.modalContent, { backgroundColor: colors.card }]}> 
           <Text style={[styles.modalTitle, { color: colors.text }]}>Add Note</Text>
           <TextInput
             style={[styles.noteInput, { backgroundColor: colors.surfaceSecondary, color: colors.text, borderColor: colors.border }]}
@@ -432,20 +432,22 @@ export default function HomeScreen() {
           />
         </Animated.View>
 
-        <View style={styles.section}>
-          <View style={styles.presetHeaderRow}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick presets</Text>
-            <TouchableOpacity style={[styles.inlineButton, { borderColor: colors.border }]} onPress={() => void handleCreateQuickPreset()}>
-              <Text style={[styles.inlineButtonLabel, { color: colors.accent }]}>Save current</Text>
-            </TouchableOpacity>
+        {quickNavigationPresets.length > 0 ? (
+          <View style={styles.section}>
+            <View style={styles.presetHeaderRow}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick presets</Text>
+              <TouchableOpacity style={[styles.inlineButton, { borderColor: colors.border }]} onPress={() => void handleCreateQuickPreset()}>
+                <Text style={[styles.inlineButtonLabel, { color: colors.accent }]}>Save current</Text>
+              </TouchableOpacity>
+            </View>
+            {quickNavigationPresets.slice(0, 3).map((preset) => (
+              <TouchableOpacity key={preset.id} style={[styles.presetItem, { backgroundColor: colors.card }]} onPress={() => handleUsePreset(preset.id)}>
+                <Text style={[styles.presetName, { color: colors.text }]} numberOfLines={1}>{preset.label}</Text>
+                <Text style={[styles.presetMeta, { color: colors.textMuted }]}>Use in map navigation</Text>
+              </TouchableOpacity>
+            ))}
           </View>
-          {quickNavigationPresets.slice(0, 3).map((preset) => (
-            <TouchableOpacity key={preset.id} style={[styles.presetItem, { backgroundColor: colors.card }]} onPress={() => handleUsePreset(preset.id)}>
-              <Text style={[styles.presetName, { color: colors.text }]} numberOfLines={1}>{preset.label}</Text>
-              <Text style={[styles.presetMeta, { color: colors.textMuted }]}>Use in map navigation</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        ) : null}
 
         {currentParking && (
           <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }]}>
@@ -551,13 +553,13 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
     padding: 20,
   },
   modalContent: {
     width: '100%',
-    maxWidth: 340,
+    maxWidth: 420,
+    alignSelf: 'center',
     borderRadius: 24,
     padding: 24,
   },

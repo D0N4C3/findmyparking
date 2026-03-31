@@ -61,10 +61,10 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   const containerStyle = useMemo<ViewStyle>(
     () => ({
-      paddingBottom: Math.max(insets.bottom, spacing.sm),
-      backgroundColor: "transparent",
+      paddingBottom: Math.max(insets.bottom, spacing.xs),
+      backgroundColor: isDark ? "rgba(2,6,23,0.94)" : "rgba(255,255,255,0.97)",
     }),
-    [insets.bottom]
+    [insets.bottom, isDark]
   );
 
   return (
@@ -247,19 +247,21 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   outerContainer: {
     position: "absolute",
-    left: spacing.md,
-    right: spacing.md,
+    left: 0,
+    right: 0,
     bottom: 0,
   },
   blurShell: {
-    borderRadius: radius.xl,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
     overflow: "hidden",
   },
   gradientShell: {
     minHeight: 84,
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: spacing.sm,
     paddingTop: spacing.xs,
-    borderRadius: radius.xl,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     alignItems: "center",
@@ -270,7 +272,6 @@ const styles = StyleSheet.create({
   tabButton: {
     flex: 1,
     minHeight: 52,
-    maxWidth: 108,
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xs,
     borderRadius: radius.lg,
