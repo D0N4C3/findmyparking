@@ -663,35 +663,37 @@ export default function SettingsScreen() {
             ))}
           </View>
 
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>QUICK PRESETS</Text>
-            {quickNavigationPresets.map((preset) => (
-              <AppCard key={preset.id} colors={colors} elevated="none" style={styles.zoneRow}>
-                <View style={styles.zoneRowMain}>
-                  <Text style={[styles.itemTitle, { color: colors.text }]}>{preset.label}</Text>
-                  <Text style={[styles.itemSubtitle, { color: colors.textMuted }]}>Mode: {preset.mode}</Text>
-                </View>
-                <View style={styles.zoneActions}>
-                  <TouchableOpacity
-                    onPress={() =>
-                      setNavigationTarget({
-                        kind: 'quick-preset',
-                        presetId: preset.id,
-                        latitude: preset.destination.latitude,
-                        longitude: preset.destination.longitude,
-                        label: preset.label,
-                      })
-                    }
-                  >
-                    <Text style={[styles.zoneLink, { color: colors.accent }]}>Use on map</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => void removeQuickNavigationPreset(preset.id)}>
-                    <Text style={[styles.zoneLink, { color: colors.error }]}>Delete</Text>
-                  </TouchableOpacity>
-                </View>
-              </AppCard>
-            ))}
-          </View>
+          {quickNavigationPresets.length > 0 ? (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>QUICK PRESETS</Text>
+              {quickNavigationPresets.map((preset) => (
+                <AppCard key={preset.id} colors={colors} elevated="none" style={styles.zoneRow}>
+                  <View style={styles.zoneRowMain}>
+                    <Text style={[styles.itemTitle, { color: colors.text }]}>{preset.label}</Text>
+                    <Text style={[styles.itemSubtitle, { color: colors.textMuted }]}>Mode: {preset.mode}</Text>
+                  </View>
+                  <View style={styles.zoneActions}>
+                    <TouchableOpacity
+                      onPress={() =>
+                        setNavigationTarget({
+                          kind: 'quick-preset',
+                          presetId: preset.id,
+                          latitude: preset.destination.latitude,
+                          longitude: preset.destination.longitude,
+                          label: preset.label,
+                        })
+                      }
+                    >
+                      <Text style={[styles.zoneLink, { color: colors.accent }]}>Use on map</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => void removeQuickNavigationPreset(preset.id)}>
+                      <Text style={[styles.zoneLink, { color: colors.error }]}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                </AppCard>
+              ))}
+            </View>
+          ) : null}
 
           {/* Data Management Section */}
           <View style={styles.section}>
