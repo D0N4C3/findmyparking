@@ -203,6 +203,8 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
   const [manualDestination, setManualDestination] = useState<ManualDestination | null>(null);
   const [navigationTarget, setNavigationTarget] = useState<NavigationTargetEntity | null>(null);
   const autoEndingSessionRef = useRef(false);
+  const autoEndReadyParkingIdRef = useRef<string | null>(null);
+  const autoEndReadyRef = useRef(false);
 
   useEffect(() => {
     void loadSavedData();
@@ -677,11 +679,30 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
   useEffect(() => {
     if (!currentParking) {
       autoEndingSessionRef.current = false;
+      autoEndReadyParkingIdRef.current = null;
+      autoEndReadyRef.current = false;
       return;
     }
 
     const distanceToCar = getDistanceToCar();
-    if (distanceToCar === null || distanceToCar > 10) {
+    if (autoEndReadyParkingIdRef.current !== currentParking.id) {
+      autoEndReadyParkingIdRef.current = currentParking.id;
+      autoEndReadyRef.current = false;
+      autoEndingSessionRef.current = false;
+    }
+
+    if (distanceToCar === null) {
+      autoEndingSessionRef.current = false;
+      return;
+    }
+
+    if (distanceToCar >= 25) {
+      autoEndReadyRef.current = true;
+      autoEndingSessionRef.current = false;
+      return;
+    }
+
+    if (!autoEndReadyRef.current || distanceToCar > 10) {
       autoEndingSessionRef.current = false;
       return;
     }

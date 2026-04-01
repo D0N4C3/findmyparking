@@ -62,9 +62,9 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const containerStyle = useMemo<ViewStyle>(
     () => ({
       paddingBottom: Math.max(insets.bottom, 0),
-      backgroundColor: "transparent",
+      backgroundColor: isDark ? "rgba(10,18,34,0.96)" : "rgba(255,255,255,0.94)",
     }),
-    [insets.bottom]
+    [insets.bottom, isDark]
   );
 
   return (
