@@ -59,6 +59,7 @@ function RootLayoutNav() {
       <Stack.Screen name="onboarding/index" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="history/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="settings/gamification" options={{ headerShown: false }} />
     </Stack>
   );
 }

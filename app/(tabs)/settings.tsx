@@ -18,7 +18,8 @@ import {
   Clock,
   Award,
   Heart,
-  Share2
+  Share2,
+  Sparkles,
 } from 'lucide-react-native';
 import { 
   View, 
@@ -37,6 +38,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { AppCard, SectionHeader } from '@/components/ui/primitives';
 import { useDialog } from '@/context/DialogContext';
 import { DIALOG_COPY } from '@/constants/dialogs';
@@ -111,6 +113,7 @@ export default function SettingsScreen() {
     setNavigationTarget,
   } = useParking();
   const { isDark } = useTheme();
+  const router = useRouter();
   const { showDestructive, showError, showConfirm } = useDialog();
   const colors = isDark ? Colors.dark : Colors.light;
   
@@ -372,7 +375,7 @@ export default function SettingsScreen() {
                 <View style={styles.statDivider} />
                 <View style={styles.statItem}>
                   <Award size={24} color="#FFFFFF" />
-                  <Text style={styles.statValue}>{Math.min(parkingStats.totalParkings, 99)}</Text>
+                  <Text style={styles.statValue}>{levelFromXp}</Text>
                   <Text style={styles.statLabel}>Level</Text>
                 </View>
               </LinearGradient>
@@ -399,6 +402,20 @@ export default function SettingsScreen() {
                 <Text style={[styles.levelMetaText, { color: colors.text }]}>{weeklyConsistency}%</Text>
               </View>
             </AppCard>
+            <TouchableOpacity
+              style={[styles.gamificationCta, { backgroundColor: colors.card, borderColor: colors.borderLight ?? colors.border }]}
+              onPress={() => router.push('/settings/gamification')}
+              activeOpacity={0.85}
+            >
+              <View style={[styles.iconContainer, { backgroundColor: colors.accent + '15' }]}>
+                <Sparkles size={20} color={colors.accent} />
+              </View>
+              <View style={styles.itemContent}>
+                <Text style={[styles.itemTitle, { color: colors.text }]}>Open Premium Gamification</Text>
+                <Text style={[styles.itemSubtitle, { color: colors.textMuted }]}>Levels, streaks, and achievements dashboard</Text>
+              </View>
+              <ChevronRight size={20} color={colors.textMuted} />
+            </TouchableOpacity>
           </View>
 
           {/* Auto Detection Section */}
@@ -830,6 +847,14 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     marginBottom: 8,
+  },
+  gamificationCta: {
+    marginTop: 8,
+    borderWidth: 0.8,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
   },
   switchLeft: {
     flexDirection: 'row',

@@ -15,7 +15,6 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -179,7 +178,7 @@ export default function MapScreen() {
     removeManualDestination,
     setNavigationTarget,
   } = useParking();
-  const { showError, showDestructive } = useDialog();
+  const { showError, showDestructive, showInfo } = useDialog();
   const theme = useTheme();
   const isDark = theme?.isDark ?? false;
   const colors = isDark ? Colors.dark : Colors.light;
@@ -726,7 +725,7 @@ export default function MapScreen() {
           style={[styles.actionPill, { backgroundColor: colors.surfaceSecondary }]}
           onPress={() => {
             setFlashlightEnabled((prev) => !prev);
-            Alert.alert('Flashlight', 'Flashlight control can be connected to native torch permissions in production builds.');
+            showInfo('Flashlight', 'Flashlight control can be connected to native torch permissions in production builds.');
           }}
         >
           <Flashlight size={16} color={colors.text} />

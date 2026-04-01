@@ -1,6 +1,7 @@
 import { useParking, ParkingSpot } from '@/context/ParkingContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Colors } from '@/constants/colors';
+import { useDialog } from '@/context/DialogContext';
 import { 
   MapPin, 
   Trash2, 
@@ -21,7 +22,6 @@ import {
   StyleSheet, 
   TouchableOpacity, 
   ScrollView,
-  Alert,
   Animated,
   Image,
   TextInput,
@@ -74,25 +74,24 @@ interface HistoryItemProps {
 
 function HistoryItem({ spot, onDelete, onPress, colors, isActive }: HistoryItemProps) {
   const swipeRef = useRef<Swipeable>(null);
+  const { showDestructive } = useDialog();
 
   const renderRightActions = useCallback(() => (
     <TouchableOpacity 
       style={[styles.deleteAction, { backgroundColor: colors.error }]}
       onPress={() => {
         swipeRef.current?.close();
-        Alert.alert(
-          'Delete Parking Spot',
-          'Are you sure you want to delete this parking location?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Delete', style: 'destructive', onPress: () => onDelete(spot.id) }
-          ]
-        );
+        showDestructive({
+          title: 'Delete Parking Spot',
+          message: 'Are you sure you want to delete this parking location?',
+          confirmLabel: 'Delete',
+          onConfirm: () => onDelete(spot.id),
+        });
       }}
     >
       <Trash2 size={24} color="#FFFFFF" />
     </TouchableOpacity>
-  ), [colors.error, onDelete, spot.id]);
+  ), [colors.error, onDelete, showDestructive, spot.id]);
 
   const getCategoryIcon = () => {
     switch (spot.category) {
@@ -132,7 +131,7 @@ function HistoryItem({ spot, onDelete, onPress, colors, isActive }: HistoryItemP
 
         <View style={styles.itemContent}>
           <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
-            {spot.address || 'Unknown Location'}
+            {spot.name || spot.address || 'Unknown Location'}
           </Text>
           
           <View style={styles.itemMeta}>
@@ -193,6 +192,7 @@ const FILTER_OPTIONS = [
   { id: 'airport', label: 'Airports' },
   { id: 'street', label: 'Street' },
   { id: 'garage', label: 'Garages' },
+  { id: 'other', label: 'General' },
 ];
 
 function FilterModal({ visible, onClose, selectedFilter, onSelectFilter, colors }: FilterModalProps) {
@@ -243,6 +243,7 @@ function FilterModal({ visible, onClose, selectedFilter, onSelectFilter, colors 
 
 export default function HistoryScreen() {
   const { parkingHistory, currentParking, deleteParkingSpot, clearHistory } = useParking();
+  const { showDestructive } = useDialog();
   const theme = useTheme();
   const isDark = theme?.isDark ?? false;
   const colors = isDark ? Colors.dark : Colors.light;
@@ -276,6 +277,7 @@ export default function HistoryScreen() {
 
     if (searchQuery) {
       spots = spots.filter(spot => 
+        spot.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         spot.address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         spot.notes?.toLowerCase().includes(searchQuery.toLowerCase())
       );
@@ -303,22 +305,16 @@ export default function HistoryScreen() {
   }, [deleteParkingSpot]);
 
   const handleClearHistory = useCallback(() => {
-    Alert.alert(
-      'Clear All History',
-      'Are you sure you want to clear all parking history? This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Clear', 
-          style: 'destructive', 
-          onPress: () => {
-            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            clearHistory();
-          }
-        }
-      ]
-    );
-  }, [clearHistory]);
+    showDestructive({
+      title: 'Clear All History',
+      message: 'Are you sure you want to clear all parking history? This cannot be undone.',
+      confirmLabel: 'Clear',
+      onConfirm: () => {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        clearHistory();
+      },
+    });
+  }, [clearHistory, showDestructive]);
 
   const handleItemPress = useCallback((spot: ParkingSpot) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

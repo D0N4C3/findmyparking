@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: radius.hero,
     padding: spacing.lg,
-    borderWidth: 1,
+    borderWidth: 0.8,
   },
   button: {
     flexDirection: 'row',
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
     borderRadius: radius.standard,
-    borderWidth: 1,
+    borderWidth: 0.8,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     minHeight: 44,
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   statTile: {
     flex: 1,
     borderRadius: radius.standard,
-    borderWidth: 1,
+    borderWidth: 0.8,
     alignItems: 'center',
     paddingVertical: spacing.sm,
     gap: spacing.xxs,
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
   },
   infoTile: {
     flex: 1,
-    borderWidth: 1,
+    borderWidth: 0.8,
     borderRadius: radius.standard,
     flexDirection: 'row',
     alignItems: 'center',
