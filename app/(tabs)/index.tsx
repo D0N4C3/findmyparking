@@ -2,7 +2,7 @@ import { Colors } from '@/constants/colors';
 import { useDialog } from '@/context/DialogContext';
 import { useParking } from '@/context/ParkingContext';
 import { useTheme } from '@/context/ThemeContext';
-import { Camera, CircleDashed, Clock3, Layers, MapPin, Navigation, NotebookPen, Sparkles } from 'lucide-react-native';
+import { Camera, CheckCircle2, CircleDashed, Clock3, Layers, MapPin, Navigation, NotebookPen, Route, SignalHigh, Sparkles } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -410,10 +410,19 @@ export default function HomeScreen() {
         ) : null}
 
         {hasParking ? (
-          <View style={[styles.confidenceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
-            <Text style={[styles.confidenceText, { color: colors.textSecondary }]}>✔ Location saved accurately</Text>
-            <Text style={[styles.confidenceText, { color: colors.textSecondary }]}>📶 GPS strong</Text>
-            <Text style={[styles.confidenceText, { color: colors.textSecondary }]}>🚶 You walked away {parkedText}</Text>
+          <View style={[styles.confidenceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.confidenceHeader}>
+              <CheckCircle2 size={16} color={colors.success} />
+              <Text style={[styles.confidenceTitle, { color: colors.text }]}>Parking Confidence</Text>
+            </View>
+            <View style={[styles.confidenceRow, { borderColor: colors.borderLight ?? colors.border }]}>
+              <SignalHigh size={14} color={colors.accent} />
+              <Text style={[styles.confidenceText, { color: colors.textSecondary }]}>Location saved with strong GPS signal</Text>
+            </View>
+            <View style={[styles.confidenceRow, { borderColor: colors.borderLight ?? colors.border }]}>
+              <Route size={14} color={colors.accent} />
+              <Text style={[styles.confidenceText, { color: colors.textSecondary }]}>Walking-away confirmation: {parkedText}</Text>
+            </View>
           </View>
         ) : (
           <View style={[styles.emptyIdeasCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -687,9 +696,20 @@ const styles = StyleSheet.create({
   },
   confidenceCard: {
     borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-    gap: 6,
+    borderRadius: 16,
+    padding: 14,
+    gap: 10,
+  },
+  confidenceHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  confidenceTitle: { fontSize: 14, fontWeight: '800' },
+  confidenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   confidenceText: { fontSize: 13, fontWeight: '500' },
   emptyIdeasCard: {
