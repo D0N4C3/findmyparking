@@ -30,6 +30,7 @@ type DialogPayload = ConfirmPayload | PickerPayload;
 
 interface DialogApi {
   showError: (title: string, message?: string, onClose?: () => void) => void;
+  showInfo: (title: string, message?: string, onClose?: () => void) => void;
   showConfirm: (config: {
     title: string;
     message?: string;
@@ -67,6 +68,18 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     setDialog({
       type: 'confirm',
       variant: 'error',
+      title,
+      message,
+      actions: [DIALOG_COPY.actions.ok],
+      onAction: () => onClose?.(),
+      accessibilityLabel: `${title}. ${message ?? ''}`.trim(),
+    });
+  }, []);
+
+  const showInfo = useCallback((title: string, message?: string, onClose?: () => void) => {
+    setDialog({
+      type: 'confirm',
+      variant: 'info',
       title,
       message,
       actions: [DIALOG_COPY.actions.ok],
@@ -150,8 +163,8 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   }, [dialog, dismissDialog]);
 
   const value = useMemo<DialogApi>(
-    () => ({ showError, showConfirm, showDestructive, showPicker, dismissDialog }),
-    [dismissDialog, showConfirm, showDestructive, showError, showPicker]
+    () => ({ showError, showInfo, showConfirm, showDestructive, showPicker, dismissDialog }),
+    [dismissDialog, showConfirm, showDestructive, showError, showInfo, showPicker]
   );
 
   return (

@@ -1,4 +1,5 @@
 import { Colors } from '@/constants/colors';
+import { useDialog } from '@/context/DialogContext';
 import { useParking } from '@/context/ParkingContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Camera, Layers, MapPin, NotebookPen, Settings } from 'lucide-react-native';
@@ -7,8 +8,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   ScrollView,
@@ -17,7 +18,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 
 function formatDistance(meters: number | null): string {
@@ -69,6 +70,8 @@ export default function HomeScreen() {
   const isDark = theme?.isDark ?? false;
   const colors = isDark ? Colors.dark : Colors.light;
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { showError, showInfo } = useDialog();
 
   const [isSaveSheetVisible, setSaveSheetVisible] = useState(false);
   const [isDetailModalVisible, setDetailModalVisible] = useState(false);
@@ -182,7 +185,7 @@ export default function HomeScreen() {
   const pickPhoto = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow photo library access to attach a parking photo.');
+      showError('Permission needed', 'Please allow photo library access to attach a parking photo.');
       return;
     }
 
@@ -195,7 +198,7 @@ export default function HomeScreen() {
       setPhotoUri(result.assets[0].uri);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
-  }, []);
+  }, [showError]);
 
   const saveDetails = useCallback(async () => {
     try {
@@ -217,21 +220,21 @@ export default function HomeScreen() {
 
       setDetailModalVisible(false);
       setSaveSheetVisible(false);
-      Alert.alert('✅ Parking saved', 'Don’t worry, I’ll remember this for you.');
+      showInfo('✅ Parking saved', 'Don’t worry, I’ll remember this for you.');
     } catch {
-      Alert.alert('Could not save details', 'Please try again.');
+      showError('Could not save details', 'Please try again.');
     }
-  }, [currentParking, levelInput, notesInput, photoUri, saveParkingLocation, spotInput, updateParkingSpot]);
+  }, [currentParking, levelInput, notesInput, photoUri, saveParkingLocation, showError, showInfo, spotInput, updateParkingSpot]);
 
   const saveOnlyLocation = useCallback(async () => {
     try {
       await saveParkingLocation();
       setSaveSheetVisible(false);
-      Alert.alert('✅ Parking saved', 'Don’t worry, I’ll remember this for you.');
+      showInfo('✅ Parking saved', 'Don’t worry, I’ll remember this for you.');
     } catch {
-      Alert.alert('Could not save parking', 'Please ensure location permission is enabled and try again.');
+      showError('Could not save parking', 'Please ensure location permission is enabled and try again.');
     }
-  }, [saveParkingLocation]);
+  }, [saveParkingLocation, showError, showInfo]);
 
   const openDetailsEditor = useCallback(() => {
     setSaveSheetVisible(false);
@@ -244,7 +247,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 128, 148) }]} showsVerticalScrollIndicator={false}>
         <View style={styles.brandRow}>
           <Text style={styles.brandText}>
             <Text style={{ color: '#FFFFFF' }}>Car</Text>
@@ -362,7 +365,7 @@ export default function HomeScreen() {
 
       <Modal animationType="slide" transparent visible={isSaveSheetVisible} onRequestClose={() => setSaveSheetVisible(false)}>
         <View style={styles.sheetBackdrop}>
-          <View style={[styles.sheetContent, { backgroundColor: colors.card }]}> 
+          <View style={[styles.sheetContent, { backgroundColor: colors.card, paddingBottom: Math.max(insets.bottom + 10, 18) }]}>
             <Text style={[styles.sheetTitle, { color: colors.text }]}>Save parking location?</Text>
             <Pressable onPress={() => void saveOnlyLocation()} style={({ pressed }) => [styles.sheetButton, { backgroundColor: colors.primary, transform: [{ scale: pressed ? 0.97 : 1 }] }]}> 
               <Text style={[styles.sheetButtonText, { color: colors.textOnAccent }]}>Save only location</Text>
@@ -376,21 +379,27 @@ export default function HomeScreen() {
 
       <Modal animationType="slide" transparent visible={isDetailModalVisible} onRequestClose={() => setDetailModalVisible(false)}>
         <View style={styles.sheetBackdrop}>
-          <View style={[styles.detailModal, { backgroundColor: colors.card }]}> 
-            <Text style={[styles.sheetTitle, { color: colors.text }]}>Parking Details</Text>
-            <TextInput value={levelInput} onChangeText={setLevelInput} placeholder="Level/Floor (B2)" placeholderTextColor={colors.textMuted} style={[styles.input, { color: colors.text, borderColor: colors.border }]} />
-            <TextInput value={spotInput} onChangeText={setSpotInput} placeholder="Spot Number (17)" placeholderTextColor={colors.textMuted} style={[styles.input, { color: colors.text, borderColor: colors.border }]} />
-            <TextInput value={notesInput} onChangeText={setNotesInput} placeholder="Notes (Near elevator)" placeholderTextColor={colors.textMuted} style={[styles.input, { color: colors.text, borderColor: colors.border }]} />
+          <KeyboardAvoidingView behavior="padding">
+            <ScrollView
+              contentContainerStyle={[styles.detailModal, { backgroundColor: colors.card, paddingBottom: Math.max(insets.bottom + 10, 18) }]}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={[styles.sheetTitle, { color: colors.text }]}>Parking Details</Text>
+              <TextInput value={levelInput} onChangeText={setLevelInput} placeholder="Level/Floor (B2)" placeholderTextColor={colors.textMuted} style={[styles.input, { color: colors.text, borderColor: colors.border }]} />
+              <TextInput value={spotInput} onChangeText={setSpotInput} placeholder="Spot Number (17)" placeholderTextColor={colors.textMuted} style={[styles.input, { color: colors.text, borderColor: colors.border }]} />
+              <TextInput value={notesInput} onChangeText={setNotesInput} placeholder="Notes (Near elevator)" placeholderTextColor={colors.textMuted} style={[styles.input, { color: colors.text, borderColor: colors.border }]} />
 
-            <Pressable onPress={pickPhoto} style={({ pressed }) => [styles.photoButton, { borderColor: colors.border, transform: [{ scale: pressed ? 0.97 : 1 }] }]}> 
-              <Camera size={16} color={colors.text} />
-              <Text style={[styles.photoButtonText, { color: colors.text }]}>{photoUri ? 'Photo added ✓' : '📸 Add Photo'}</Text>
-            </Pressable>
+              <Pressable onPress={pickPhoto} style={({ pressed }) => [styles.photoButton, { borderColor: colors.border, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
+                <Camera size={16} color={colors.text} />
+                <Text style={[styles.photoButtonText, { color: colors.text }]}>{photoUri ? 'Photo added ✓' : '📸 Add Photo'}</Text>
+              </Pressable>
 
-            <Pressable onPress={() => void saveDetails()} style={({ pressed }) => [styles.sheetButton, { backgroundColor: colors.primary, transform: [{ scale: pressed ? 0.97 : 1 }] }]}> 
-              <Text style={[styles.sheetButtonText, { color: colors.textOnAccent }]}>Save Details</Text>
-            </Pressable>
-          </View>
+              <Pressable onPress={() => void saveDetails()} style={({ pressed }) => [styles.sheetButton, { backgroundColor: colors.primary, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
+                <Text style={[styles.sheetButtonText, { color: colors.textOnAccent }]}>Save Details</Text>
+              </Pressable>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </SafeAreaView>
