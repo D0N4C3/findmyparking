@@ -2,7 +2,7 @@ import { Colors } from '@/constants/colors';
 import { useDialog } from '@/context/DialogContext';
 import { useParking } from '@/context/ParkingContext';
 import { useTheme } from '@/context/ThemeContext';
-import { Camera, CircleDashed, Layers, MapPin, NotebookPen } from 'lucide-react-native';
+import { Camera, CircleDashed, Clock3, Layers, MapPin, Navigation, NotebookPen, Sparkles } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -95,6 +95,7 @@ export default function HomeScreen() {
   const contentRiseAnim = useRef(new Animated.Value(10)).current;
   const livePulse = useRef(new Animated.Value(0.2)).current;
   const movingDot = useRef(new Animated.Value(0.2)).current;
+  const previewGlow = useRef(new Animated.Value(0.35)).current;
   const animatedDistance = useRef(new Animated.Value(distance ?? 0)).current;
   const [animatedDistanceText, setAnimatedDistanceText] = useState(distanceValueText);
   const previousProgressRef = useRef(0.2);
@@ -128,6 +129,21 @@ export default function HomeScreen() {
       pulseLoop.stop();
     };
   }, [livePulse]);
+
+  useEffect(() => {
+    const previewLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(previewGlow, { toValue: 1, duration: 950, useNativeDriver: true }),
+        Animated.timing(previewGlow, { toValue: 0.35, duration: 950, useNativeDriver: true }),
+      ]),
+    );
+
+    previewLoop.start();
+
+    return () => {
+      previewLoop.stop();
+    };
+  }, [previewGlow]);
 
   useEffect(() => {
     const listener = animatedDistance.addListener(({ value }) => {
@@ -273,7 +289,7 @@ export default function HomeScreen() {
           <LinearGradient colors={isDark ? ['#1A2740', '#0E1729'] : ['#FAFCFF', '#ECF3FF']} style={[styles.mainCard, { borderColor: isDark ? 'rgba(148,163,184,0.18)' : 'rgba(37,99,235,0.12)' }]}>
             <View style={styles.mainTopRow}>
               <View style={styles.liveRow}>
-                <Text style={[styles.carLabel, { color: colors.text }]}>🚗 Your Car</Text>
+                <Text style={[styles.carLabel, { color: colors.text }]}>Your Car</Text>
                 <Animated.View style={[styles.liveDot, { backgroundColor: colors.success, opacity: livePulse, transform: [{ scale: livePulse }] }]} />
                 <Text style={[styles.liveText, { color: colors.textMuted }]}>Live</Text>
               </View>
@@ -298,7 +314,7 @@ export default function HomeScreen() {
             ) : (
               <>
                 <Text style={[styles.emptyTitle, { color: colors.text }]}>No parking location saved</Text>
-                <Text style={[styles.microContext, { color: colors.textSecondary }]}>Save your location and add details so you can find your exact spot fast.</Text>
+                <Text style={[styles.microContext, { color: colors.textSecondary }]}>Save once, find your car faster later.</Text>
               </>
             )}
           </LinearGradient>
@@ -309,7 +325,32 @@ export default function HomeScreen() {
             <View style={[styles.detailsCard, { backgroundColor: colors.card, borderColor: colors.border }]}> 
               <Text style={[styles.detailsTitle, { color: colors.text }]}>Parking Details</Text>
               {parkingDetails ? (
-                <Text style={[styles.detailsText, { color: colors.textSecondary }]}>{parkingDetails}</Text>
+                <View style={styles.detailsPremiumGrid}>
+                  {currentParking?.level ? (
+                    <View style={[styles.detailPill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+                      <Layers size={14} color={colors.accent} />
+                      <Text style={[styles.detailPillText, { color: colors.text }]}>Level {currentParking.level}</Text>
+                    </View>
+                  ) : null}
+                  {currentParking?.spotNumber ? (
+                    <View style={[styles.detailPill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+                      <MapPin size={14} color={colors.accent} />
+                      <Text style={[styles.detailPillText, { color: colors.text }]}>Spot {currentParking.spotNumber}</Text>
+                    </View>
+                  ) : null}
+                  <View style={[styles.detailPill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+                    <Clock3 size={14} color={colors.accent} />
+                    <Text style={[styles.detailPillText, { color: colors.text }]}>{parkedText}</Text>
+                  </View>
+                  {currentParking?.notes ? (
+                    <View style={[styles.detailPill, styles.detailPillWide, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+                      <NotebookPen size={14} color={colors.accent} />
+                      <Text style={[styles.detailPillText, { color: colors.text }]} numberOfLines={1}>
+                        {currentParking.notes}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
               ) : (
                 <>
                   <Pressable onPress={() => setDetailModalVisible(true)} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
@@ -329,10 +370,28 @@ export default function HomeScreen() {
         {hasParking ? (
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: contentRiseAnim }] }}>
           <View style={[styles.navPreviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}> 
-            <Text style={[styles.previewTitle, { color: colors.text }]}>Mini Navigation Preview</Text>
+            <View style={styles.previewHeaderRow}>
+              <View style={styles.previewTitleWrap}>
+                <Navigation size={14} color={colors.accent} />
+                <Text style={[styles.previewTitle, { color: colors.text }]}>Mini Navigation Preview</Text>
+              </View>
+              <View style={[styles.previewLiveChip, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+                <Sparkles size={12} color={colors.accent} />
+                <Text style={[styles.previewLiveText, { color: colors.textSecondary }]}>Live</Text>
+              </View>
+            </View>
             <View style={styles.previewLane}>
               <Text style={[styles.previewLabel, { color: colors.textMuted }]}>You</Text>
-              <View style={[styles.previewLine, { backgroundColor: colors.textMuted }]}>
+              <View style={[styles.previewLine, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+                <Animated.View
+                  style={[
+                    styles.previewLineGlow,
+                    {
+                      backgroundColor: colors.accent,
+                      opacity: previewGlow.interpolate({ inputRange: [0.35, 1], outputRange: [0.2, 0.45] }),
+                    },
+                  ]}
+                />
                 <Animated.View
                   style={[
                     styles.movingDot,
@@ -350,24 +409,6 @@ export default function HomeScreen() {
           </Animated.View>
         ) : null}
 
-        {!hasParking ? (
-          <Pressable
-            onPress={() => setSaveSheetVisible(true)}
-            disabled={isLoading}
-            style={({ pressed }) => [
-              styles.saveButton,
-              {
-                backgroundColor: colors.primary,
-                transform: [{ scale: pressed ? 0.97 : 1 }],
-                opacity: isLoading ? 0.6 : 1,
-              },
-            ]}
-          >
-            <MapPin size={18} color={colors.textOnAccent} />
-            <Text style={[styles.saveButtonText, { color: colors.textOnAccent }]}>{isLoading ? 'Saving...' : 'Save Parking'}</Text>
-          </Pressable>
-        ) : null}
-
         {hasParking ? (
           <View style={[styles.confidenceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
             <Text style={[styles.confidenceText, { color: colors.textSecondary }]}>✔ Location saved accurately</Text>
@@ -380,30 +421,31 @@ export default function HomeScreen() {
               <CircleDashed size={14} color={colors.accent} />
               <Text style={[styles.emptyIdeasTitle, { color: colors.text }]}>Make your next save smarter</Text>
             </View>
-            <Text style={[styles.emptyIdeasItem, { color: colors.textSecondary }]}>• Add the level and spot so your future self can find it instantly.</Text>
-            <Text style={[styles.emptyIdeasItem, { color: colors.textSecondary }]}>• Attach a photo near landmarks like elevators or exits.</Text>
-            <Text style={[styles.emptyIdeasItem, { color: colors.textSecondary }]}>• Save right after parking to lock in a precise GPS point.</Text>
+            <Text style={[styles.emptyIdeasItem, { color: colors.textSecondary }]}>• Add level + spot.</Text>
+            <Text style={[styles.emptyIdeasItem, { color: colors.textSecondary }]}>• Capture one landmark photo.</Text>
+            <Text style={[styles.emptyIdeasItem, { color: colors.textSecondary }]}>• Save immediately after parking.</Text>
           </View>
         )}
 
-      </ScrollView>
+        <Pressable
+          onPress={hasParking ? handleEndSession : () => setSaveSheetVisible(true)}
+          disabled={isLoading}
+          style={({ pressed }) => [
+            hasParking ? styles.endSessionButton : styles.saveButton,
+            {
+              backgroundColor: hasParking ? 'rgba(239,68,68,0.92)' : colors.primary,
+              transform: [{ scale: pressed ? 0.97 : 1 }],
+              opacity: isLoading ? 0.6 : 1,
+            },
+          ]}
+        >
+          {hasParking ? null : <MapPin size={18} color={colors.textOnAccent} />}
+          <Text style={hasParking ? styles.endSessionText : [styles.saveButtonText, { color: colors.textOnAccent }]}>
+            {hasParking ? 'End Session' : isLoading ? 'Saving...' : 'Save Parking'}
+          </Text>
+        </Pressable>
 
-      {hasParking ? (
-        <View style={[styles.bottomActionWrap, { paddingBottom: Math.max(insets.bottom + 10, 16), backgroundColor: colors.background }]}>
-          <Pressable
-            onPress={handleEndSession}
-            style={({ pressed }) => [
-              styles.endSessionButton,
-              {
-                backgroundColor: 'rgba(239,68,68,0.92)',
-                transform: [{ scale: pressed ? 0.97 : 1 }],
-              },
-            ]}
-          >
-            <Text style={styles.endSessionText}>End Session</Text>
-          </Pressable>
-        </View>
-      ) : null}
+      </ScrollView>
 
       <Modal animationType="slide" transparent visible={isSaveSheetVisible} onRequestClose={() => setSaveSheetVisible(false)}>
         <View style={styles.sheetBackdrop}>
@@ -434,7 +476,7 @@ export default function HomeScreen() {
 
               <Pressable onPress={pickPhoto} style={({ pressed }) => [styles.photoButton, { borderColor: colors.border, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
                 <Camera size={16} color={colors.text} />
-                <Text style={[styles.photoButtonText, { color: colors.text }]}>{photoUri ? 'Photo added ✓' : '📸 Add Photo'}</Text>
+                <Text style={[styles.photoButtonText, { color: colors.text }]}>{photoUri ? 'Photo added ✓' : 'Add Photo'}</Text>
               </Pressable>
 
               <Pressable onPress={() => void saveDetails()} style={({ pressed }) => [styles.sheetButton, { backgroundColor: colors.primary, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
@@ -527,6 +569,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  detailsPremiumGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  detailPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  detailPillWide: {
+    width: '100%',
+    borderRadius: 12,
+  },
+  detailPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
   addDetailsCta: {
     fontSize: 14,
     fontWeight: '700',
@@ -542,9 +607,32 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 10,
   },
+  previewHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  previewTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   previewTitle: {
     fontSize: 15,
     fontWeight: '700',
+  },
+  previewLiveChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  previewLiveText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   previewLane: {
     flexDirection: 'row',
@@ -554,14 +642,24 @@ const styles = StyleSheet.create({
   previewLabel: { fontSize: 12, fontWeight: '600' },
   previewLine: {
     flex: 1,
-    height: 3,
+    height: 14,
+    borderWidth: 1,
     borderRadius: 99,
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  previewLineGlow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
   },
   movingDot: {
     width: 10,
     height: 10,
     borderRadius: 999,
+    marginLeft: 2,
   },
   previewSubtitle: { fontSize: 12, textAlign: 'center' },
   saveButton: {
@@ -575,13 +673,6 @@ const styles = StyleSheet.create({
   saveButtonText: {
     fontSize: 16,
     fontWeight: '700',
-  },
-  bottomActionWrap: {
-    position: 'absolute',
-    left: 18,
-    right: 18,
-    bottom: 0,
-    paddingTop: 10,
   },
   endSessionButton: {
     minHeight: 52,
