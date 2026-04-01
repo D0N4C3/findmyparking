@@ -463,7 +463,7 @@ export default function HomeScreen() {
             <Pressable onPress={() => void saveOnlyLocation()} style={({ pressed }) => [styles.sheetButton, { backgroundColor: colors.primary, transform: [{ scale: pressed ? 0.97 : 1 }] }]}> 
               <Text style={[styles.sheetButtonText, { color: colors.textOnAccent }]}>Save only location</Text>
             </Pressable>
-            <Pressable onPress={openDetailsEditor} style={({ pressed }) => [styles.sheetButton, { borderColor: colors.border, borderWidth: 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}> 
+            <Pressable onPress={openDetailsEditor} style={({ pressed }) => [styles.sheetButton, { borderColor: colors.border, borderWidth: 0.8, transform: [{ scale: pressed ? 0.97 : 1 }] }]}> 
               <Text style={[styles.sheetSecondaryButtonText, { color: colors.text }]}>+ Add details (recommended)</Text>
             </Pressable>
           </View>
@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   mainCard: {
-    borderWidth: 1,
+    borderWidth: 0.8,
     borderRadius: 22,
     padding: 16,
     gap: 8,
@@ -565,7 +565,7 @@ const styles = StyleSheet.create({
   primaryButtonText: { fontSize: 16, fontWeight: '700' },
   emptyTitle: { fontSize: 22, fontWeight: '700' },
   detailsCard: {
-    borderWidth: 1,
+    borderWidth: 0.8,
     borderRadius: 16,
     padding: 14,
     gap: 8,
@@ -586,7 +586,7 @@ const styles = StyleSheet.create({
   detailPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: 0.8,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -611,7 +611,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   navPreviewCard: {
-    borderWidth: 1,
+    borderWidth: 0.8,
     borderRadius: 16,
     padding: 14,
     gap: 10,
@@ -634,7 +634,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    borderWidth: 1,
+    borderWidth: 0.8,
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -652,7 +652,7 @@ const styles = StyleSheet.create({
   previewLine: {
     flex: 1,
     height: 14,
-    borderWidth: 1,
+    borderWidth: 0.8,
     borderRadius: 99,
     justifyContent: 'center',
     overflow: 'hidden',
@@ -695,7 +695,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   confidenceCard: {
-    borderWidth: 1,
+    borderWidth: 0.8,
     borderRadius: 16,
     padding: 14,
     gap: 10,
@@ -706,14 +706,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderWidth: 1,
+    borderWidth: 0.8,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
   confidenceText: { fontSize: 13, fontWeight: '500' },
   emptyIdeasCard: {
-    borderWidth: 1,
+    borderWidth: 0.8,
     borderRadius: 14,
     padding: 12,
     gap: 7,
@@ -768,7 +768,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   input: {
-    borderWidth: 1,
+    borderWidth: 0.8,
     borderRadius: 10,
     minHeight: 46,
     paddingHorizontal: 12,
@@ -776,7 +776,7 @@ const styles = StyleSheet.create({
   },
   photoButton: {
     minHeight: 46,
-    borderWidth: 1,
+    borderWidth: 0.8,
     borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',

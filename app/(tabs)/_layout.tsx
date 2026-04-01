@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 0.5,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
   activePill: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 0.5,
   },
   tabLabel: {
     ...typography.caption,
