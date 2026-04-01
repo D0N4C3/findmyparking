@@ -64,6 +64,7 @@ export default function HomeScreen() {
     saveParkingLocation,
     updateParkingSpot,
     setNavigationTarget,
+    endParkingSession,
     isLoading,
   } = useParking();
   const theme = useTheme();
@@ -71,7 +72,7 @@ export default function HomeScreen() {
   const colors = isDark ? Colors.dark : Colors.light;
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { showError, showInfo } = useDialog();
+  const { showDestructive, showError, showInfo } = useDialog();
 
   const [isSaveSheetVisible, setSaveSheetVisible] = useState(false);
   const [isDetailModalVisible, setDetailModalVisible] = useState(false);
@@ -241,13 +242,26 @@ export default function HomeScreen() {
     setDetailModalVisible(true);
   }, []);
 
+  const handleEndSession = useCallback(() => {
+    if (!hasParking) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    showDestructive({
+      title: 'End parking session?',
+      message: 'Your active parking location will be archived in history.',
+      confirmLabel: 'End Session',
+      onConfirm: () => {
+        void endParkingSession();
+      },
+    });
+  }, [endParkingSession, hasParking, showDestructive]);
+
   const parkingDetails = [currentParking?.level ? `Level ${currentParking.level}` : '', currentParking?.spotNumber ? `Spot ${currentParking.spotNumber}` : '', currentParking?.notes ? currentParking.notes : '']
     .filter(Boolean)
     .join(' • ');
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 128, 148) }]} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + (hasParking ? 184 : 128), hasParking ? 220 : 148) }]} showsVerticalScrollIndicator={false}>
         <View style={styles.brandRow}>
           <Text style={styles.brandText}>
             <Text style={{ color: '#FFFFFF' }}>Car</Text>
@@ -290,25 +304,27 @@ export default function HomeScreen() {
           </LinearGradient>
         </Animated.View>
 
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: contentRiseAnim }] }}>
-        <View style={[styles.detailsCard, { backgroundColor: colors.card, borderColor: colors.border }]}> 
-          <Text style={[styles.detailsTitle, { color: colors.text }]}>Parking Details</Text>
-          {parkingDetails ? (
-            <Text style={[styles.detailsText, { color: colors.textSecondary }]}>{parkingDetails}</Text>
-          ) : (
-            <>
-              <Pressable onPress={() => setDetailModalVisible(true)} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
-                <Text style={[styles.addDetailsCta, { color: colors.primary }]}>Add level, spot, or note</Text>
-              </Pressable>
-              <View style={styles.detailsIconsRow}>
-                <Layers size={15} color={colors.textMuted} />
-                <NotebookPen size={15} color={colors.textMuted} />
-                <Camera size={15} color={colors.textMuted} />
-              </View>
-            </>
-          )}
-        </View>
-        </Animated.View>
+        {hasParking ? (
+          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: contentRiseAnim }] }}>
+            <View style={[styles.detailsCard, { backgroundColor: colors.card, borderColor: colors.border }]}> 
+              <Text style={[styles.detailsTitle, { color: colors.text }]}>Parking Details</Text>
+              {parkingDetails ? (
+                <Text style={[styles.detailsText, { color: colors.textSecondary }]}>{parkingDetails}</Text>
+              ) : (
+                <>
+                  <Pressable onPress={() => setDetailModalVisible(true)} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
+                    <Text style={[styles.addDetailsCta, { color: colors.primary }]}>Add level, spot, or note</Text>
+                  </Pressable>
+                  <View style={styles.detailsIconsRow}>
+                    <Layers size={15} color={colors.textMuted} />
+                    <NotebookPen size={15} color={colors.textMuted} />
+                    <Camera size={15} color={colors.textMuted} />
+                  </View>
+                </>
+              )}
+            </View>
+          </Animated.View>
+        ) : null}
 
         {hasParking ? (
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: contentRiseAnim }] }}>
@@ -334,21 +350,23 @@ export default function HomeScreen() {
           </Animated.View>
         ) : null}
 
-        <Pressable
-          onPress={() => setSaveSheetVisible(true)}
-          disabled={isLoading}
-          style={({ pressed }) => [
-            styles.saveButton,
-            {
-              backgroundColor: colors.primary,
-              transform: [{ scale: pressed ? 0.97 : 1 }],
-              opacity: isLoading ? 0.6 : 1,
-            },
-          ]}
-        >
-          <MapPin size={18} color={colors.textOnAccent} />
-          <Text style={[styles.saveButtonText, { color: colors.textOnAccent }]}>{isLoading ? 'Saving...' : 'Save Parking'}</Text>
-        </Pressable>
+        {!hasParking ? (
+          <Pressable
+            onPress={() => setSaveSheetVisible(true)}
+            disabled={isLoading}
+            style={({ pressed }) => [
+              styles.saveButton,
+              {
+                backgroundColor: colors.primary,
+                transform: [{ scale: pressed ? 0.97 : 1 }],
+                opacity: isLoading ? 0.6 : 1,
+              },
+            ]}
+          >
+            <MapPin size={18} color={colors.textOnAccent} />
+            <Text style={[styles.saveButtonText, { color: colors.textOnAccent }]}>{isLoading ? 'Saving...' : 'Save Parking'}</Text>
+          </Pressable>
+        ) : null}
 
         {hasParking ? (
           <View style={[styles.confidenceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
@@ -369,6 +387,23 @@ export default function HomeScreen() {
         )}
 
       </ScrollView>
+
+      {hasParking ? (
+        <View style={[styles.bottomActionWrap, { paddingBottom: Math.max(insets.bottom + 10, 16), backgroundColor: colors.background }]}>
+          <Pressable
+            onPress={handleEndSession}
+            style={({ pressed }) => [
+              styles.endSessionButton,
+              {
+                backgroundColor: 'rgba(239,68,68,0.92)',
+                transform: [{ scale: pressed ? 0.97 : 1 }],
+              },
+            ]}
+          >
+            <Text style={styles.endSessionText}>End Session</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <Modal animationType="slide" transparent visible={isSaveSheetVisible} onRequestClose={() => setSaveSheetVisible(false)}>
         <View style={styles.sheetBackdrop}>
@@ -540,6 +575,24 @@ const styles = StyleSheet.create({
   saveButtonText: {
     fontSize: 16,
     fontWeight: '700',
+  },
+  bottomActionWrap: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    bottom: 0,
+    paddingTop: 10,
+  },
+  endSessionButton: {
+    minHeight: 52,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  endSessionText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
   },
   confidenceCard: {
     borderWidth: 1,

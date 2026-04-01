@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DEFAULT_STARTUP_PERMISSION_ASKED_STATE,
   orchestrateStartupPermissions,
@@ -202,6 +202,7 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
   const [quickNavigationPresets, setQuickNavigationPresets] = useState<QuickNavigationPreset[]>([]);
   const [manualDestination, setManualDestination] = useState<ManualDestination | null>(null);
   const [navigationTarget, setNavigationTarget] = useState<NavigationTargetEntity | null>(null);
+  const autoEndingSessionRef = useRef(false);
 
   useEffect(() => {
     void loadSavedData();
@@ -672,6 +673,23 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     const walkingSpeed = 1.4;
     return Math.ceil(distance / walkingSpeed / 60);
   }, [getDistanceToCar]);
+
+  useEffect(() => {
+    if (!currentParking) {
+      autoEndingSessionRef.current = false;
+      return;
+    }
+
+    const distanceToCar = getDistanceToCar();
+    if (distanceToCar === null || distanceToCar > 10) {
+      autoEndingSessionRef.current = false;
+      return;
+    }
+
+    if (autoEndingSessionRef.current) return;
+    autoEndingSessionRef.current = true;
+    void endParkingSession();
+  }, [currentParking, endParkingSession, getDistanceToCar, currentLocation]);
 
   const addFavoritePlace = useCallback(async (favorite: Omit<FavoritePlace, 'id' | 'createdAt'>) => {
     const nextFavorite: FavoritePlace = {
