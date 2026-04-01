@@ -265,6 +265,14 @@ export default function HistoryScreen() {
       ? [currentParking, ...parkingHistory] 
       : parkingHistory;
 
+    const seen = new Set<string>();
+    spots = spots.filter((spot) => {
+      const key = `${spot.id}-${spot.timestamp}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
     if (searchQuery) {
       spots = spots.filter(spot => 
         spot.address?.toLowerCase().includes(searchQuery.toLowerCase()) ||

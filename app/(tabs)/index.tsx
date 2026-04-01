@@ -2,7 +2,7 @@ import { Colors } from '@/constants/colors';
 import { useDialog } from '@/context/DialogContext';
 import { useParking } from '@/context/ParkingContext';
 import { useTheme } from '@/context/ThemeContext';
-import { Camera, Layers, MapPin, NotebookPen, Settings } from 'lucide-react-native';
+import { Camera, CircleDashed, Layers, MapPin, NotebookPen } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -253,9 +253,6 @@ export default function HomeScreen() {
             <Text style={{ color: '#FFFFFF' }}>Car</Text>
             <Text style={{ color: colors.accent }}>Ping</Text>
           </Text>
-          <Pressable onPress={() => router.push('/settings')} style={({ pressed }) => [styles.settingsIconButton, { opacity: pressed ? 0.8 : 1, backgroundColor: colors.surfaceTertiary }]}>
-            <Settings size={18} color={colors.text} />
-          </Pressable>
         </View>
 
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: contentRiseAnim }] }}>
@@ -359,7 +356,17 @@ export default function HomeScreen() {
             <Text style={[styles.confidenceText, { color: colors.textSecondary }]}>📶 GPS strong</Text>
             <Text style={[styles.confidenceText, { color: colors.textSecondary }]}>🚶 You walked away {parkedText}</Text>
           </View>
-        ) : null}
+        ) : (
+          <View style={[styles.emptyIdeasCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.emptyIdeasHeader}>
+              <CircleDashed size={14} color={colors.accent} />
+              <Text style={[styles.emptyIdeasTitle, { color: colors.text }]}>Make your next save smarter</Text>
+            </View>
+            <Text style={[styles.emptyIdeasItem, { color: colors.textSecondary }]}>• Add the level and spot so your future self can find it instantly.</Text>
+            <Text style={[styles.emptyIdeasItem, { color: colors.textSecondary }]}>• Attach a photo near landmarks like elevators or exits.</Text>
+            <Text style={[styles.emptyIdeasItem, { color: colors.textSecondary }]}>• Save right after parking to lock in a precise GPS point.</Text>
+          </View>
+        )}
 
       </ScrollView>
 
@@ -419,16 +426,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   brandText: {
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: '800',
     letterSpacing: 0.4,
-  },
-  settingsIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   mainCard: {
     borderWidth: 1,
@@ -548,6 +548,25 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   confidenceText: { fontSize: 13, fontWeight: '500' },
+  emptyIdeasCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 7,
+  },
+  emptyIdeasHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  emptyIdeasTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  emptyIdeasItem: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
   sheetBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.35)',
