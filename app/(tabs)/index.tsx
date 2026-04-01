@@ -1,7 +1,7 @@
 import { Colors } from '@/constants/colors';
 import { useParking } from '@/context/ParkingContext';
 import { useTheme } from '@/context/ThemeContext';
-import { Camera, History, MapPin, Navigation, Settings } from 'lucide-react-native';
+import { Camera, Layers, MapPin, NotebookPen, Settings } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -88,16 +88,27 @@ export default function HomeScreen() {
   const directionHint = useMemo(() => getDirectionHint(direction), [direction]);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const contentRiseAnim = useRef(new Animated.Value(10)).current;
   const livePulse = useRef(new Animated.Value(0.2)).current;
-  const movingDot = useRef(new Animated.Value(0)).current;
+  const movingDot = useRef(new Animated.Value(0.2)).current;
+  const animatedDistance = useRef(new Animated.Value(distance ?? 0)).current;
+  const [animatedDistanceText, setAnimatedDistanceText] = useState(distanceValueText);
+  const previousProgressRef = useRef(0.2);
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 350,
-      useNativeDriver: true,
-    }).start();
-  }, [fadeAnim]);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 350,
+        useNativeDriver: true,
+      }),
+      Animated.timing(contentRiseAnim, {
+        toValue: 0,
+        duration: 350,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [contentRiseAnim, fadeAnim]);
 
   useEffect(() => {
     const pulseLoop = Animated.loop(
@@ -107,21 +118,46 @@ export default function HomeScreen() {
       ])
     );
 
-    const dotLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(movingDot, { toValue: 1, duration: 2000, useNativeDriver: true }),
-        Animated.timing(movingDot, { toValue: 0, duration: 2000, useNativeDriver: true }),
-      ])
-    );
-
     pulseLoop.start();
-    dotLoop.start();
 
     return () => {
       pulseLoop.stop();
-      dotLoop.stop();
     };
-  }, [livePulse, movingDot]);
+  }, [livePulse]);
+
+  useEffect(() => {
+    const listener = animatedDistance.addListener(({ value }) => {
+      setAnimatedDistanceText(formatDistance(value));
+    });
+
+    return () => {
+      animatedDistance.removeListener(listener);
+    };
+  }, [animatedDistance]);
+
+  useEffect(() => {
+    Animated.timing(animatedDistance, {
+      toValue: distance ?? 0,
+      duration: 260,
+      useNativeDriver: false,
+    }).start();
+  }, [animatedDistance, distance]);
+
+  useEffect(() => {
+    if (!hasParking) return;
+    const safeDistance = distance ?? 200;
+    const clamped = Math.min(Math.max(safeDistance, 10), 200);
+    const progress = 0.2 + ((200 - clamped) / 190) * 0.7;
+
+    if (Math.abs(progress - previousProgressRef.current) < 0.05) return;
+    previousProgressRef.current = progress;
+
+    Animated.timing(movingDot, {
+      toValue: progress,
+      duration: 450,
+      useNativeDriver: true,
+    }).start();
+  }, [distance, hasParking, movingDot]);
 
   useEffect(() => {
     setLevelInput(currentParking?.level ?? '');
@@ -209,31 +245,40 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Animated.View style={{ opacity: fadeAnim }}>
-          <LinearGradient colors={isDark ? ['#182036', '#101827'] : ['#F7FAFF', '#EEF4FF']} style={styles.mainCard}>
+        <View style={styles.brandRow}>
+          <Text style={styles.brandText}>
+            <Text style={{ color: '#FFFFFF' }}>Car</Text>
+            <Text style={{ color: colors.accent }}>Ping</Text>
+          </Text>
+          <Pressable onPress={() => router.push('/settings')} style={({ pressed }) => [styles.settingsIconButton, { opacity: pressed ? 0.8 : 1, backgroundColor: colors.surfaceTertiary }]}>
+            <Settings size={18} color={colors.text} />
+          </Pressable>
+        </View>
+
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: contentRiseAnim }] }}>
+          <LinearGradient colors={isDark ? ['#1A2740', '#0E1729'] : ['#FAFCFF', '#ECF3FF']} style={[styles.mainCard, { borderColor: isDark ? 'rgba(148,163,184,0.18)' : 'rgba(37,99,235,0.12)' }]}>
             <View style={styles.mainTopRow}>
               <View style={styles.liveRow}>
                 <Text style={[styles.carLabel, { color: colors.text }]}>🚗 Your Car</Text>
                 <Animated.View style={[styles.liveDot, { backgroundColor: colors.success, opacity: livePulse, transform: [{ scale: livePulse }] }]} />
                 <Text style={[styles.liveText, { color: colors.textMuted }]}>Live</Text>
               </View>
-              <Text style={[styles.subtleStatus, { color: colors.textMuted }]}>{parkedText}</Text>
             </View>
 
             {hasParking ? (
               <>
-                <Text style={[styles.distanceValue, { color: colors.text }]}>{distanceValueText}</Text>
-                <Text style={[styles.distanceSuffix, { color: colors.textMuted }]}>away</Text>
-
-                <Text style={[styles.directionHint, { color: colors.text }]}>{directionHint}</Text>
-                <Text style={[styles.microContext, { color: colors.textSecondary }]}>{walkText} • {currentParking?.address || 'Saved location'}</Text>
+                <View style={styles.mainInfoRow}>
+                  <Text style={[styles.distanceValue, { color: colors.text }]}>{animatedDistanceText}</Text>
+                  <Text style={[styles.directionHint, { color: colors.text }]}>{directionHint}</Text>
+                </View>
+                <Text style={[styles.microContext, { color: colors.textSecondary }]}>{walkText} • {currentParking?.address || '2V4J+XF7'}</Text>
+                <Text style={[styles.subtleStatus, { color: colors.textMuted }]}>{parkedText}</Text>
 
                 <Pressable
                   onPress={goToNavigation}
                   style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
                 >
-                  <Navigation size={18} color={colors.textOnAccent} />
-                  <Text style={[styles.primaryButtonText, { color: colors.textOnAccent }]}>Navigate to Car</Text>
+                  <Text style={[styles.primaryButtonText, { color: colors.textOnAccent }]}>Navigate</Text>
                 </Pressable>
               </>
             ) : (
@@ -245,37 +290,48 @@ export default function HomeScreen() {
           </LinearGradient>
         </Animated.View>
 
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: contentRiseAnim }] }}>
         <View style={[styles.detailsCard, { backgroundColor: colors.card, borderColor: colors.border }]}> 
-          <Text style={[styles.detailsTitle, { color: colors.text }]}>📍 Parking Details</Text>
+          <Text style={[styles.detailsTitle, { color: colors.text }]}>Parking Details</Text>
           {parkingDetails ? (
             <Text style={[styles.detailsText, { color: colors.textSecondary }]}>{parkingDetails}</Text>
           ) : (
-            <Pressable onPress={() => setDetailModalVisible(true)} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
-              <Text style={[styles.addDetailsCta, { color: colors.primary }]}>Add parking details</Text>
-            </Pressable>
+            <>
+              <Pressable onPress={() => setDetailModalVisible(true)} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
+                <Text style={[styles.addDetailsCta, { color: colors.primary }]}>Add level, spot, or note</Text>
+              </Pressable>
+              <View style={styles.detailsIconsRow}>
+                <Layers size={15} color={colors.textMuted} />
+                <NotebookPen size={15} color={colors.textMuted} />
+                <Camera size={15} color={colors.textMuted} />
+              </View>
+            </>
           )}
         </View>
+        </Animated.View>
 
         {hasParking ? (
+          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: contentRiseAnim }] }}>
           <View style={[styles.navPreviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}> 
             <Text style={[styles.previewTitle, { color: colors.text }]}>Mini Navigation Preview</Text>
             <View style={styles.previewLane}>
-              <Text style={styles.previewIcon}>🔵</Text>
+              <Text style={[styles.previewLabel, { color: colors.textMuted }]}>You</Text>
               <View style={[styles.previewLine, { backgroundColor: colors.textMuted }]}>
                 <Animated.View
                   style={[
                     styles.movingDot,
                     {
                       backgroundColor: colors.accent,
-                      transform: [{ translateX: movingDot.interpolate({ inputRange: [0, 1], outputRange: [0, 130] }) }],
+                      transform: [{ translateX: movingDot.interpolate({ inputRange: [0, 1], outputRange: [0, 220] }) }],
                     },
                   ]}
                 />
               </View>
-              <Text style={styles.previewIcon}>🚗</Text>
+              <Text style={[styles.previewLabel, { color: colors.textMuted }]}>Car</Text>
             </View>
-            <Text style={[styles.previewSubtitle, { color: colors.textMuted }]}>{directionHint}</Text>
+            <Text style={[styles.previewSubtitle, { color: colors.textMuted }]}>You → Car</Text>
           </View>
+          </Animated.View>
         ) : null}
 
         <Pressable
@@ -291,7 +347,7 @@ export default function HomeScreen() {
           ]}
         >
           <MapPin size={18} color={colors.textOnAccent} />
-          <Text style={[styles.saveButtonText, { color: colors.textOnAccent }]}>{isLoading ? 'Saving...' : '📍 Save Parking'}</Text>
+          <Text style={[styles.saveButtonText, { color: colors.textOnAccent }]}>{isLoading ? 'Saving...' : 'Save Parking'}</Text>
         </Pressable>
 
         {hasParking ? (
@@ -302,27 +358,6 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
-        <View style={styles.quickActionsRow}>
-          <Pressable onPress={pickPhoto} style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1 }, styles.quickAction]}>
-            <Camera size={14} color={colors.textMuted} />
-            <Text style={[styles.quickActionText, { color: colors.textMuted }]}>Add Photo</Text>
-          </Pressable>
-          <Pressable onPress={() => setDetailModalVisible(true)} style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1 }, styles.quickAction]}>
-            <MapPin size={14} color={colors.textMuted} />
-            <Text style={[styles.quickActionText, { color: colors.textMuted }]}>Add Note</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.bottomRow}>
-          <Pressable onPress={() => router.push('/history')} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }, styles.bottomAction]}>
-            <History size={16} color={colors.textMuted} />
-            <Text style={[styles.bottomActionText, { color: colors.textMuted }]}>History</Text>
-          </Pressable>
-          <Pressable onPress={() => router.push('/settings')} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }, styles.bottomAction]}>
-            <Settings size={16} color={colors.textMuted} />
-            <Text style={[styles.bottomActionText, { color: colors.textMuted }]}>Settings</Text>
-          </Pressable>
-        </View>
       </ScrollView>
 
       <Modal animationType="slide" transparent visible={isSaveSheetVisible} onRequestClose={() => setSaveSheetVisible(false)}>
@@ -366,13 +401,31 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   content: {
     paddingHorizontal: 18,
-    paddingVertical: 16,
-    gap: 18,
+    paddingVertical: 14,
+    gap: 14,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  brandText: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  settingsIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mainCard: {
+    borderWidth: 1,
     borderRadius: 22,
-    padding: 22,
-    gap: 10,
+    padding: 16,
+    gap: 8,
   },
   mainTopRow: { gap: 4 },
   liveRow: {
@@ -387,28 +440,27 @@ const styles = StyleSheet.create({
   liveDot: { width: 9, height: 9, borderRadius: 999 },
   liveText: { fontSize: 12, fontWeight: '700' },
   subtleStatus: { fontSize: 13 },
+  mainInfoRow: {
+    marginTop: 3,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 10,
+  },
   distanceValue: {
-    fontSize: 52,
+    fontSize: 42,
     fontWeight: '900',
     letterSpacing: -1,
-    marginTop: 6,
-  },
-  distanceSuffix: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginTop: -6,
   },
   directionHint: {
-    fontSize: 20,
+    fontSize: 30,
     fontWeight: '700',
-    marginTop: 8,
   },
   microContext: {
-    fontSize: 14,
+    fontSize: 13,
   },
   primaryButton: {
-    marginTop: 10,
-    minHeight: 54,
+    marginTop: 8,
+    minHeight: 45,
     borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -421,7 +473,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
-    gap: 6,
+    gap: 8,
   },
   detailsTitle: {
     fontSize: 16,
@@ -434,6 +486,11 @@ const styles = StyleSheet.create({
   addDetailsCta: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  detailsIconsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    opacity: 0.5,
   },
   navPreviewCard: {
     borderWidth: 1,
@@ -450,7 +507,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  previewIcon: { fontSize: 18 },
+  previewLabel: { fontSize: 12, fontWeight: '600' },
   previewLine: {
     flex: 1,
     height: 3,
@@ -462,7 +519,7 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 999,
   },
-  previewSubtitle: { fontSize: 13 },
+  previewSubtitle: { fontSize: 12, textAlign: 'center' },
   saveButton: {
     minHeight: 52,
     borderRadius: 14,
@@ -482,26 +539,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   confidenceText: { fontSize: 13, fontWeight: '500' },
-  quickActionsRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  quickAction: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  quickActionText: { fontSize: 13, fontWeight: '600' },
-  bottomRow: {
-    marginTop: 2,
-    flexDirection: 'row',
-    gap: 18,
-  },
-  bottomAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  bottomActionText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
   sheetBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.35)',
