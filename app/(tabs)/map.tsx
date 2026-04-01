@@ -15,11 +15,12 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Constants from 'expo-constants';
 import * as Haptics from 'expo-haptics';
 import type * as Location from 'expo-location';
@@ -37,6 +38,10 @@ import {
   Pin,
   EyeOff,
   Eye,
+  Flashlight,
+  Ellipsis,
+  Volume2,
+  Vibrate,
 } from 'lucide-react-native';
 
 type RouteStep = {
@@ -93,6 +98,26 @@ function distanceBetween(a: Coordinates, b: Coordinates): number {
     Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
   const c = 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
   return earthRadius * c;
+}
+
+function calculateBearing(from: Coordinates, to: Coordinates): number {
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+  const toDegrees = (radians: number) => (radians * 180) / Math.PI;
+  const lat1 = toRadians(from.latitude);
+  const lat2 = toRadians(to.latitude);
+  const dLon = toRadians(to.longitude - from.longitude);
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  return (toDegrees(Math.atan2(y, x)) + 360) % 360;
+}
+
+function getSimpleDirectionCue(relativeBearing: number): string {
+  const normalized = ((relativeBearing + 540) % 360) - 180;
+  const abs = Math.abs(normalized);
+  if (abs <= 20) return '⬆️ Walk straight';
+  if (abs <= 50) return normalized < 0 ? '↖ Slight left' : '↗ Slight right';
+  if (abs <= 120) return normalized < 0 ? '⬅️ Turn left' : '➡️ Turn right';
+  return '↩️ Turn around';
 }
 
 function decodePolyline(encoded: string): Coordinates[] {
@@ -181,6 +206,11 @@ export default function MapScreen() {
   const [routeMeta, setRouteMeta] = useState<RouteMeta>({ mode: 'osrm', totalDistance: null, etaMinutes: null });
   const [isPinDropMode, setIsPinDropMode] = useState(false);
   const [sheetState, setSheetState] = useState<SheetState>('expanded');
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const [voiceGuidanceEnabled, setVoiceGuidanceEnabled] = useState(false);
+  const [flashlightEnabled, setFlashlightEnabled] = useState(false);
+  const [hasArrived, setHasArrived] = useState(false);
+  const [lastProximityHint, setLastProximityHint] = useState<string | null>(null);
 
   const distance = getDistanceToCar();
   const walkingTime = getWalkingTimeToCar();
@@ -327,6 +357,36 @@ export default function MapScreen() {
     };
   }, [currentParking, navigationTarget]);
   const activeTargetSource = resolvedNavigationTarget?.kind === 'manual-pin' ? 'Manual Pin' : 'Car';
+  const liveDistanceMeters = useMemo(() => {
+    if (!currentLocation || !resolvedNavigationTarget) return null;
+    return Math.round(
+      distanceBetween(
+        { latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude },
+        { latitude: resolvedNavigationTarget.latitude, longitude: resolvedNavigationTarget.longitude },
+      ),
+    );
+  }, [currentLocation, resolvedNavigationTarget]);
+  const liveEtaMinutes = useMemo(() => {
+    if (liveDistanceMeters == null) return walkingTime;
+    return Math.max(1, Math.round(liveDistanceMeters / 75));
+  }, [liveDistanceMeters, walkingTime]);
+  const heading = currentLocation?.coords.heading ?? null;
+  const directionCue = useMemo(() => {
+    if (!currentLocation || !resolvedNavigationTarget) return '⬆️ Start navigation';
+    const bearing = calculateBearing(
+      { latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude },
+      { latitude: resolvedNavigationTarget.latitude, longitude: resolvedNavigationTarget.longitude },
+    );
+    if (heading == null || heading < 0) return '⬆️ Walk toward your car';
+    return getSimpleDirectionCue(bearing - heading);
+  }, [currentLocation, heading, resolvedNavigationTarget]);
+  const gpsAccuracyText = useMemo(() => {
+    const accuracy = currentLocation?.coords.accuracy;
+    if (accuracy == null) return '📶 Accuracy: Unknown';
+    if (accuracy <= 12) return '📶 Accuracy: High';
+    if (accuracy <= 30) return '📶 Accuracy: Medium';
+    return '📶 Low GPS accuracy — move slightly';
+  }, [currentLocation?.coords.accuracy]);
 
   const buildNavigation = useCallback(async () => {
     if (!resolvedNavigationTarget) {
@@ -501,9 +561,53 @@ export default function MapScreen() {
   const isSheetHidden = sheetState === 'hidden';
   const isSheetCollapsed = sheetState === 'collapsed';
   const isSheetExpanded = sheetState === 'expanded';
+  const proximityMessage =
+    hasArrived
+      ? '🎉 Your car is nearby!'
+      : liveDistanceMeters != null && liveDistanceMeters <= 20
+        ? 'Car marker pulsing — almost there'
+        : liveDistanceMeters != null && liveDistanceMeters <= 50
+          ? "You're getting close 👀"
+          : null;
   const cycleSheetState = useCallback(() => {
     setSheetState((prev) => (prev === 'hidden' ? 'collapsed' : prev === 'collapsed' ? 'expanded' : 'collapsed'));
   }, []);
+
+  useEffect(() => {
+    if (liveDistanceMeters == null) {
+      setHasArrived(false);
+      setLastProximityHint(null);
+      return;
+    }
+    if (liveDistanceMeters <= 15 && !hasArrived) {
+      setHasArrived(true);
+      setLastProximityHint('🎉 Your car is nearby!');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return;
+    }
+    if (liveDistanceMeters <= 20 && lastProximityHint !== 'close') {
+      setLastProximityHint('close');
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      return;
+    }
+    if (liveDistanceMeters <= 50 && lastProximityHint !== 'near') {
+      setLastProximityHint('near');
+    }
+  }, [hasArrived, lastProximityHint, liveDistanceMeters]);
+
+  useEffect(() => {
+    if (!mapRef.current || liveDistanceMeters == null || !currentLocation) return;
+    const zoomDelta = liveDistanceMeters > 300 ? 0.02 : liveDistanceMeters > 120 ? 0.01 : 0.005;
+    mapRef.current.animateToRegion(
+      {
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+        latitudeDelta: zoomDelta,
+        longitudeDelta: zoomDelta,
+      },
+      450,
+    );
+  }, [currentLocation, liveDistanceMeters]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -546,7 +650,7 @@ export default function MapScreen() {
       >
         {currentParking && (
           <Marker coordinate={{ latitude: currentParking.latitude, longitude: currentParking.longitude }} title="Your car" description="Saved parking location">
-            <View style={[styles.carPin, { backgroundColor: colors.accent }]}>
+            <View style={[styles.carPin, liveDistanceMeters != null && liveDistanceMeters <= 20 ? styles.carPinPulse : null, { backgroundColor: '#facc15' }]}>
               <Car size={14} color="#fff" />
             </View>
           </Marker>
@@ -573,21 +677,22 @@ export default function MapScreen() {
 
       <View style={[styles.mapOverlay, { paddingTop: insets.top + 8 }]}>
         <View style={styles.headerRow}>
-          <View>
-            <Text style={[styles.title, { color: '#fff' }]}>Navigate to car</Text>
-            <Text style={[styles.subtitle, { color: 'rgba(255,255,255,0.82)' }]}>
-              {routeMeta.mode === 'direct' ? 'Direct guidance mode active' : 'Premium walk-first guidance'}
+          <View style={styles.infoCard}>
+            <Text style={styles.infoCardTitle}>🚗 Your Car</Text>
+            <Text style={styles.infoCardStat}>
+              Distance: {formatDistance(liveDistanceMeters ?? distance)} · ETA: {formatEta(liveEtaMinutes)}
             </Text>
-            {routeMeta.mode === 'direct' && (
-              <View style={styles.directModeBadge}>
-                <Text style={styles.directModeBadgeLabel}>DIRECT GUIDANCE MODE</Text>
-              </View>
-            )}
+            {proximityMessage ? <Text style={styles.proximityHint}>{proximityMessage}</Text> : null}
+            <Text style={styles.accuracyHint}>{gpsAccuracyText}</Text>
           </View>
 
           <TouchableOpacity style={styles.iconAction} onPress={() => void shareParking()}>
             <Share2 size={18} color="#fff" />
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.directionCard}>
+          <Text style={styles.directionCue}>{directionCue}</Text>
         </View>
 
         <View style={styles.fabStack}>
@@ -617,6 +722,47 @@ export default function MapScreen() {
           </View>
         )}
       </View>
+
+      <View style={[styles.actionBar, { bottom: tabBarHeight + 18, backgroundColor: colors.cardElevated ?? colors.card, borderColor: colors.border }]}>
+        <TouchableOpacity style={[styles.actionPill, { backgroundColor: colors.accent }]} onPress={() => void buildNavigation()} disabled={isLoadingRoute || !resolvedNavigationTarget}>
+          {isLoadingRoute ? <ActivityIndicator size="small" color={colors.textOnAccent} /> : <Route size={16} color={colors.textOnAccent} />}
+          <Text style={[styles.actionPillLabel, { color: colors.textOnAccent }]}>{isLoadingRoute ? 'Building...' : 'Start Navigation'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionPill, { backgroundColor: colors.surfaceSecondary }]}
+          onPress={() => {
+            setFlashlightEnabled((prev) => !prev);
+            Alert.alert('Flashlight', 'Flashlight control can be connected to native torch permissions in production builds.');
+          }}
+        >
+          <Flashlight size={16} color={colors.text} />
+          <Text style={[styles.actionPillLabel, { color: colors.text }]}>{flashlightEnabled ? 'Flashlight On' : 'Flashlight'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.actionIcon, { backgroundColor: colors.surfaceSecondary }]} onPress={() => setIsMoreMenuOpen((prev) => !prev)}>
+          <Ellipsis size={18} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
+      {isMoreMenuOpen && (
+        <View style={[styles.moreMenu, { bottom: tabBarHeight + 80, backgroundColor: colors.cardElevated ?? colors.card, borderColor: colors.border }]}>
+          <TouchableOpacity style={styles.moreMenuItem} onPress={() => setVoiceGuidanceEnabled((prev) => !prev)}>
+            <Volume2 size={15} color={colors.text} />
+            <Text style={[styles.moreMenuText, { color: colors.text }]}>{voiceGuidanceEnabled ? 'Voice ON' : 'Voice OFF'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.moreMenuItem} onPress={() => void shareParking()}>
+            <Share2 size={15} color={colors.text} />
+            <Text style={[styles.moreMenuText, { color: colors.text }]}>Share location</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.moreMenuItem} onPress={openExternalMaps}>
+            <Navigation size={15} color={colors.text} />
+            <Text style={[styles.moreMenuText, { color: colors.text }]}>Open in Google Maps</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.moreMenuItem} onPress={() => void Haptics.selectionAsync()}>
+            <Vibrate size={15} color={colors.text} />
+            <Text style={[styles.moreMenuText, { color: colors.text }]}>Haptic check</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View pointerEvents={isSheetHidden ? 'box-none' : 'auto'} style={styles.sheetContainer}>
         <Pressable
@@ -835,31 +981,51 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
   },
-  title: {
-    fontSize: 30,
+  infoCard: {
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 16,
+    backgroundColor: 'rgba(17,24,39,0.72)',
+    maxWidth: '86%',
+  },
+  infoCardTitle: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '800',
   },
-  subtitle: {
-    marginTop: 3,
-    fontSize: 15,
+  infoCardStat: {
+    marginTop: 4,
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 13,
     fontWeight: '600',
   },
-  directModeBadge: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(245,158,11,0.95)',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  directModeBadgeLabel: {
-    color: '#111827',
+  accuracyHint: {
+    marginTop: 4,
+    color: 'rgba(255,255,255,0.75)',
     fontSize: 11,
+    fontWeight: '500',
+  },
+  proximityHint: {
+    marginTop: 5,
+    color: '#d1fae5',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  directionCard: {
+    alignSelf: 'center',
+    marginBottom: 172,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  directionCue: {
+    color: '#fff',
+    fontSize: 26,
     fontWeight: '800',
-    letterSpacing: 0.3,
   },
   iconAction: {
     width: 42,
@@ -900,6 +1066,13 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
     borderWidth: 2,
   },
+  carPinPulse: {
+    shadowColor: '#facc15',
+    shadowOpacity: 0.7,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 10,
+  },
   manualPin: {
     width: 26,
     height: 26,
@@ -931,6 +1104,58 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
     pointerEvents: 'box-none',
+  },
+  actionBar: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionPill: {
+    minHeight: 42,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  actionPillLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  actionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 'auto',
+  },
+  moreMenu: {
+    position: 'absolute',
+    right: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 8,
+    minWidth: 180,
+    gap: 2,
+  },
+  moreMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  moreMenuText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   sheetToggle: {
     alignSelf: 'center',
