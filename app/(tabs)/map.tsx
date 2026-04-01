@@ -44,19 +44,7 @@ import {
   Vibrate,
 } from 'lucide-react-native';
 
-type RouteStep = {
-  instruction: string;
-  distance: number;
-};
-
-type RouteMode = 'osrm' | 'direct';
 type RouteErrorKind = 'network_timeout' | 'no_route' | 'api_error';
-
-type RouteMeta = {
-  mode: RouteMode;
-  totalDistance: number | null;
-  etaMinutes: number | null;
-};
 
 type Coordinates = {
   latitude: number;
@@ -64,6 +52,7 @@ type Coordinates = {
 };
 
 type SheetState = 'hidden' | 'collapsed' | 'expanded';
+type ProximityStage = 'none' | 'near' | 'close' | 'arrived';
 
 const DEFAULT_REGION = {
   latitude: 37.7749,
@@ -181,8 +170,6 @@ export default function MapScreen() {
     saveParkingLocation,
     addQuickNavigationPreset,
     endParkingSession,
-    quickNavigationPresets,
-    offlineParkingZones,
     manualDestination,
     navigationTarget,
     createManualDestination,
@@ -200,17 +187,13 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
-  const [navigationSteps, setNavigationSteps] = useState<RouteStep[]>([]);
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [routeCoordinates, setRouteCoordinates] = useState<Coordinates[]>([]);
-  const [routeMeta, setRouteMeta] = useState<RouteMeta>({ mode: 'osrm', totalDistance: null, etaMinutes: null });
   const [isPinDropMode, setIsPinDropMode] = useState(false);
   const [sheetState, setSheetState] = useState<SheetState>('expanded');
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [voiceGuidanceEnabled, setVoiceGuidanceEnabled] = useState(false);
   const [flashlightEnabled, setFlashlightEnabled] = useState(false);
-  const [hasArrived, setHasArrived] = useState(false);
-  const [lastProximityHint, setLastProximityHint] = useState<string | null>(null);
+  const [proximityStage, setProximityStage] = useState<ProximityStage>('none');
 
   const distance = getDistanceToCar();
   const walkingTime = getWalkingTimeToCar();
@@ -356,7 +339,6 @@ export default function MapScreen() {
       label: 'My parked car',
     };
   }, [currentParking, navigationTarget]);
-  const activeTargetSource = resolvedNavigationTarget?.kind === 'manual-pin' ? 'Manual Pin' : 'Car';
   const liveDistanceMeters = useMemo(() => {
     if (!currentLocation || !resolvedNavigationTarget) return null;
     return Math.round(
@@ -411,13 +393,6 @@ export default function MapScreen() {
       });
 
       setRouteCoordinates(next.coordinates);
-      setNavigationSteps(next.steps);
-      setCurrentStepIndex(0);
-      setRouteMeta({
-        mode: 'osrm',
-        totalDistance: next.totalDistance,
-        etaMinutes: next.etaMinutes,
-      });
       console.info('[MapScreen] navigation_build_success', {
         mode: 'osrm',
         steps: next.steps.length,
@@ -443,13 +418,6 @@ export default function MapScreen() {
         { latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude },
         { latitude: resolvedNavigationTarget.latitude, longitude: resolvedNavigationTarget.longitude },
       ]);
-      setNavigationSteps([{ instruction: 'Continue straight to your parked car', distance: fallbackDistance }]);
-      setCurrentStepIndex(0);
-      setRouteMeta({
-        mode: 'direct',
-        totalDistance: fallbackDistance,
-        etaMinutes: walkingTime ?? null,
-      });
       if (errorKind === 'network_timeout') {
         showError('Routing timed out', 'Network timeout while building route. Direct guidance mode is active.');
       } else if (errorKind === 'no_route') {
@@ -465,7 +433,7 @@ export default function MapScreen() {
     } finally {
       setIsLoadingRoute(false);
     }
-  }, [resolvedNavigationTarget, currentLocation, fetchRoute, showError, walkingTime]);
+  }, [resolvedNavigationTarget, currentLocation, fetchRoute, showError]);
 
   const saveManualAsQuickDestination = useCallback(async () => {
     if (!manualDestination) return;
@@ -539,21 +507,11 @@ export default function MapScreen() {
       confirmLabel: 'End Session',
       onConfirm: () => {
         void endParkingSession();
-        setNavigationSteps([]);
         setRouteCoordinates([]);
-        setCurrentStepIndex(0);
-        setRouteMeta({ mode: 'osrm', totalDistance: null, etaMinutes: null });
       },
     });
   }, [currentParking, endParkingSession, showDestructive]);
 
-  const safeStepIndex = navigationSteps.length > 0 ? Math.min(currentStepIndex, navigationSteps.length - 1) : 0;
-  const activeStep = navigationSteps[safeStepIndex];
-  const nextStep = navigationSteps[safeStepIndex + 1];
-  const remainingDistance = useMemo(
-    () => navigationSteps.slice(safeStepIndex).reduce((sum, step) => sum + step.distance, 0),
-    [navigationSteps, safeStepIndex],
-  );
   const isSmallScreen = viewportHeight < 740;
   const sheetContentMaxHeight = Math.round(viewportHeight * (isSmallScreen ? 0.7 : 0.62));
   const sheetBottomOffset = tabBarHeight;
@@ -562,11 +520,11 @@ export default function MapScreen() {
   const isSheetCollapsed = sheetState === 'collapsed';
   const isSheetExpanded = sheetState === 'expanded';
   const proximityMessage =
-    hasArrived
+    proximityStage === 'arrived'
       ? '🎉 Your car is nearby!'
-      : liveDistanceMeters != null && liveDistanceMeters <= 20
+      : proximityStage === 'close'
         ? 'Car marker pulsing — almost there'
-        : liveDistanceMeters != null && liveDistanceMeters <= 50
+        : proximityStage === 'near'
           ? "You're getting close 👀"
           : null;
   const cycleSheetState = useCallback(() => {
@@ -574,26 +532,22 @@ export default function MapScreen() {
   }, []);
 
   useEffect(() => {
-    if (liveDistanceMeters == null) {
-      setHasArrived(false);
-      setLastProximityHint(null);
-      return;
-    }
-    if (liveDistanceMeters <= 15 && !hasArrived) {
-      setHasArrived(true);
-      setLastProximityHint('🎉 Your car is nearby!');
+    const nextStage: ProximityStage =
+      liveDistanceMeters == null ? 'none' : liveDistanceMeters <= 15 ? 'arrived' : liveDistanceMeters <= 20 ? 'close' : liveDistanceMeters <= 50 ? 'near' : 'none';
+
+    if (nextStage === proximityStage) return;
+
+    setProximityStage(nextStage);
+
+    if (nextStage === 'arrived') {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return;
     }
-    if (liveDistanceMeters <= 20 && lastProximityHint !== 'close') {
-      setLastProximityHint('close');
+
+    if (nextStage === 'close') {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      return;
     }
-    if (liveDistanceMeters <= 50 && lastProximityHint !== 'near') {
-      setLastProximityHint('near');
-    }
-  }, [hasArrived, lastProximityHint, liveDistanceMeters]);
+  }, [liveDistanceMeters, proximityStage]);
 
   useEffect(() => {
     if (!mapRef.current || liveDistanceMeters == null || !currentLocation) return;
@@ -832,73 +786,23 @@ export default function MapScreen() {
                   contentContainerStyle={styles.expandedContent}
                   showsVerticalScrollIndicator={false}
                 >
-                  {(routeMeta.totalDistance != null || routeMeta.etaMinutes != null) && (
-                    <View style={styles.chipsRow}>
-                      <View style={[styles.metaChip, { backgroundColor: colors.surfaceSecondary }]}>
-                        <Text style={[styles.metaChipLabel, { color: colors.textSecondary }]}>Route</Text>
-                        <Text style={[styles.metaChipValue, { color: colors.text }]}>
-                          {routeMeta.mode === 'osrm' ? 'OSRM walk route' : 'Direct guidance'}
-                        </Text>
-                      </View>
-                    <View style={[styles.metaChip, { backgroundColor: colors.surfaceSecondary }]}>
-                      <Text style={[styles.metaChipLabel, { color: colors.textSecondary }]}>Target Source</Text>
-                      <Text style={[styles.metaChipValue, { color: colors.text }]}>{activeTargetSource}</Text>
-                    </View>
-                    <View style={[styles.metaChip, { backgroundColor: colors.surfaceSecondary }]}>
-                        <Text style={[styles.metaChipLabel, { color: colors.textSecondary }]}>Distance</Text>
-                        <Text style={[styles.metaChipValue, { color: colors.text }]}>{formatDistance(routeMeta.totalDistance)}</Text>
-                      </View>
-                      <View style={[styles.metaChip, { backgroundColor: colors.surfaceSecondary }]}>
-                        <Text style={[styles.metaChipLabel, { color: colors.textSecondary }]}>ETA</Text>
-                        <Text style={[styles.metaChipValue, { color: colors.text }]}>{formatEta(routeMeta.etaMinutes)}</Text>
-                      </View>
-                    </View>
-                  )}
-
-                  {activeStep && (
-                    <View style={[styles.stepCard, { backgroundColor: colors.surfaceSecondary }]}> 
-                      <Route size={16} color={colors.accent} />
-                      <View style={styles.stepTextWrap}>
-                        <Text style={[styles.stepProgressLabel, { color: colors.textSecondary }]}>
-                          Step {safeStepIndex + 1} of {navigationSteps.length}
-                        </Text>
-                        <Text style={[styles.stepTitle, { color: colors.text }]} numberOfLines={2}>{activeStep.instruction}</Text>
-                        <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-                          {formatDistance(activeStep.distance)} now • {formatDistance(remainingDistance)} remaining
-                        </Text>
-                        {nextStep ? (
-                          <Text style={[styles.stepUpcoming, { color: colors.textSecondary }]} numberOfLines={2}>
-                            Next: {nextStep.instruction} ({formatDistance(nextStep.distance)})
-                          </Text>
-                        ) : (
-                          <Text style={[styles.stepUpcoming, { color: colors.textSecondary }]} numberOfLines={1}>
-                            Final segment to your car
-                          </Text>
-                        )}
-                      </View>
-                      <TouchableOpacity
-                        style={[styles.stepAdvance, { backgroundColor: colors.accent }]}
-                        onPress={() => setCurrentStepIndex((prev) => Math.min(prev + 1, navigationSteps.length - 1))}
-                        disabled={safeStepIndex >= navigationSteps.length - 1}
-                      >
-                        <Text style={[styles.stepAdvanceLabel, { color: colors.textOnAccent }]}>Next</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-
                   <View style={styles.actionsRow}>
                     <TouchableOpacity style={[styles.secondaryAction, { backgroundColor: colors.surfaceSecondary }]} onPress={openExternalMaps}>
                       <Navigation size={17} color={colors.text} />
                       <Text style={[styles.secondaryActionLabel, { color: colors.text }]}>Open Maps</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={[styles.primaryAction, { backgroundColor: colors.accent }]} onPress={() => void buildNavigation()} disabled={isLoadingRoute || !resolvedNavigationTarget}>
+                    <TouchableOpacity
+                      style={[styles.primaryAction, { backgroundColor: colors.accent }]}
+                      onPress={() => void buildNavigation()}
+                      disabled={isLoadingRoute || !resolvedNavigationTarget}
+                    >
                       {isLoadingRoute ? (
                         <ActivityIndicator size="small" color={colors.textOnAccent} />
                       ) : (
                         <Route size={18} color={colors.textOnAccent} />
                       )}
-                      <Text style={[styles.primaryActionLabel, { color: colors.textOnAccent }]}>{isLoadingRoute ? 'Building...' : 'Start Walk Route'}</Text>
+                      <Text style={[styles.primaryActionLabel, { color: colors.textOnAccent }]}>{isLoadingRoute ? 'Building...' : 'Refresh Route'}</Text>
                     </TouchableOpacity>
                   </View>
                   {manualDestination && (
@@ -917,43 +821,6 @@ export default function MapScreen() {
                       </TouchableOpacity>
                     </View>
                   )}
-                  <View style={styles.targetList}>
-                    {quickNavigationPresets.slice(0, 2).map((preset) => (
-                      <TouchableOpacity
-                        key={preset.id}
-                        style={[styles.targetChip, { backgroundColor: colors.surfaceSecondary }]}
-                        onPress={() =>
-                          setNavigationTarget({
-                            kind: 'quick-preset',
-                            presetId: preset.id,
-                            latitude: preset.destination.latitude,
-                            longitude: preset.destination.longitude,
-                            label: preset.label,
-                          })
-                        }
-                      >
-                        <Text style={[styles.targetChipText, { color: colors.text }]} numberOfLines={1}>Preset: {preset.label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                    {offlineParkingZones.slice(0, 2).map((zone) => (
-                      <TouchableOpacity
-                        key={zone.id}
-                        style={[styles.targetChip, { backgroundColor: colors.surfaceSecondary }]}
-                        onPress={() =>
-                          setNavigationTarget({
-                            kind: 'offline-zone',
-                            zoneId: zone.id,
-                            latitude: zone.center.latitude,
-                            longitude: zone.center.longitude,
-                            label: zone.name,
-                          })
-                        }
-                      >
-                        <Text style={[styles.targetChipText, { color: colors.text }]} numberOfLines={1}>Zone: {zone.name}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
                   <TouchableOpacity
                     style={[styles.endSessionAction, { backgroundColor: colors.surfaceSecondary }]}
                     onPress={handleEndSession}
