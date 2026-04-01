@@ -113,7 +113,7 @@ function HistoryItem({ spot, onDelete, onPress, colors, isActive }: HistoryItemP
         style={[
           styles.historyItem, 
           { backgroundColor: colors.card, borderColor: colors.borderLight ?? colors.border },
-          isActive && { borderColor: colors.accent, borderWidth: 2 }
+          isActive && { borderColor: colors.accent, borderWidth: 1.2 }
         ]}
         onPress={() => onPress(spot)}
         activeOpacity={0.7}
@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 0.8,
     gap: 12,
   },
   searchInput: {
@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    borderWidth: 1,
+    borderWidth: 0.8,
   },
   statPillText: {
     fontSize: 13,
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 18,
     marginBottom: 10,
-    borderWidth: 1,
+    borderWidth: 0.8,
     borderColor: 'transparent',
   },
   iconContainer: {
@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 1.2,
     borderColor: '#FFFFFF',
   },
   activeDot: {
