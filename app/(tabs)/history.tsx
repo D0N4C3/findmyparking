@@ -9,7 +9,11 @@ import {
   Bluetooth,
   Search,
   Filter,
-  Clock
+  Clock,
+  Building2,
+  Plane,
+  ParkingSquare,
+  Route
 } from 'lucide-react-native';
 import { 
   View, 
@@ -92,11 +96,11 @@ function HistoryItem({ spot, onDelete, onPress, colors, isActive }: HistoryItemP
 
   const getCategoryIcon = () => {
     switch (spot.category) {
-      case 'mall': return '🏢';
-      case 'airport': return '✈️';
-      case 'street': return '🛣️';
-      case 'garage': return '🅿️';
-      default: return '🚗';
+      case 'mall': return <Building2 size={18} color={colors.accent} />;
+      case 'airport': return <Plane size={18} color={colors.accent} />;
+      case 'street': return <Route size={18} color={colors.accent} />;
+      case 'garage': return <ParkingSquare size={18} color={colors.accent} />;
+      default: return <MapPin size={18} color={colors.accent} />;
     }
   };
 
@@ -109,7 +113,7 @@ function HistoryItem({ spot, onDelete, onPress, colors, isActive }: HistoryItemP
       <TouchableOpacity 
         style={[
           styles.historyItem, 
-          { backgroundColor: colors.card },
+          { backgroundColor: colors.card, borderColor: colors.borderLight ?? colors.border },
           isActive && { borderColor: colors.accent, borderWidth: 2 }
         ]}
         onPress={() => onPress(spot)}
@@ -118,9 +122,7 @@ function HistoryItem({ spot, onDelete, onPress, colors, isActive }: HistoryItemP
         <View style={[styles.iconContainer, { backgroundColor: colors.accent + '15' }]}>
           {spot.photoUrl ? (
             <Image source={{ uri: spot.photoUrl }} style={styles.thumbnail} />
-          ) : (
-            <Text style={styles.categoryIcon}>{getCategoryIcon()}</Text>
-          )}
+          ) : getCategoryIcon()}
           {isActive && (
             <View style={[styles.activeBadge, { backgroundColor: colors.success }]}>
               <View style={styles.activeDot} />
@@ -186,11 +188,11 @@ interface FilterModalProps {
 }
 
 const FILTER_OPTIONS = [
-  { id: 'all', label: 'All', icon: '📋' },
-  { id: 'mall', label: 'Malls', icon: '🏢' },
-  { id: 'airport', label: 'Airports', icon: '✈️' },
-  { id: 'street', label: 'Street', icon: '🛣️' },
-  { id: 'garage', label: 'Garages', icon: '🅿️' },
+  { id: 'all', label: 'All' },
+  { id: 'mall', label: 'Malls' },
+  { id: 'airport', label: 'Airports' },
+  { id: 'street', label: 'Street' },
+  { id: 'garage', label: 'Garages' },
 ];
 
 function FilterModal({ visible, onClose, selectedFilter, onSelectFilter, colors }: FilterModalProps) {
@@ -222,7 +224,6 @@ function FilterModal({ visible, onClose, selectedFilter, onSelectFilter, colors 
                 onClose();
               }}
             >
-              <Text style={styles.filterIcon}>{option.icon}</Text>
               <Text style={[
                 styles.filterLabel,
                 { color: selectedFilter === option.id ? colors.accent : colors.text }
@@ -351,7 +352,7 @@ export default function HistoryScreen() {
       />
 
       {/* Search Bar */}
-      <AppCard colors={colors} style={styles.searchContainer} elevated="none">
+      <AppCard colors={colors} style={[styles.searchContainer, { borderColor: colors.borderLight ?? colors.border }]} elevated="none">
         <Search size={18} color={colors.textMuted} />
         <TextInput
           style={[styles.searchInput, { color: colors.text }]}
@@ -373,13 +374,24 @@ export default function HistoryScreen() {
       <View style={styles.statsRow}>
         <LinearGradient
           colors={[colors.accent + '20', colors.accent + '10']}
-          style={styles.statPill}
+          style={[styles.statPill, { borderColor: colors.borderLight ?? colors.border }]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
         >
           <Clock size={14} color={colors.accent} />
           <Text style={[styles.statPillText, { color: colors.text }]}>
             {stats.thisMonth} this month
+          </Text>
+        </LinearGradient>
+        <LinearGradient
+          colors={[colors.success + '1F', colors.success + '0D']}
+          style={[styles.statPill, { borderColor: colors.borderLight ?? colors.border }]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        >
+          <MapPin size={14} color={colors.success} />
+          <Text style={[styles.statPillText, { color: colors.text }]}>
+            {stats.total} total
           </Text>
         </LinearGradient>
       </View>
@@ -490,6 +502,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 16,
+    borderWidth: 1,
     gap: 12,
   },
   searchInput: {
@@ -511,17 +524,20 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
+    gap: 8,
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 4,
   },
   statPill: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
   },
   statPillText: {
     fontSize: 13,
@@ -580,9 +596,6 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: '100%',
     height: '100%',
-  },
-  categoryIcon: {
-    fontSize: 24,
   },
   activeBadge: {
     position: 'absolute',
@@ -699,10 +712,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 14,
     marginBottom: 6,
-  },
-  filterIcon: {
-    fontSize: 20,
-    marginRight: 12,
   },
   filterLabel: {
     flex: 1,

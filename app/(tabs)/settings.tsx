@@ -5,7 +5,7 @@ import {
   PERMISSION_STATUS_LABELS,
   PermissionBadgeStatus,
 } from '@/services/permissions';
-import { 
+import {
   Bluetooth, 
   MapPin, 
   Bell, 
@@ -14,9 +14,6 @@ import {
   Info,
   Shield,
   Navigation,
-  Moon,
-  Sun,
-  Smartphone,
   Car,
   Clock,
   Award,
@@ -34,7 +31,6 @@ import {
   Animated,
   Share,
   AppState,
-  TextInput
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -67,7 +63,7 @@ interface SettingItemProps {
 function SettingItem({ icon, title, subtitle, onPress, rightElement, colors, destructive }: SettingItemProps) {
   return (
     <TouchableOpacity 
-      style={[styles.settingItem, { backgroundColor: colors.card }]}
+      style={[styles.settingItem, { backgroundColor: colors.card, borderColor: colors.borderLight ?? colors.border }]}
       onPress={onPress}
       disabled={!onPress}
       activeOpacity={0.7}
@@ -99,38 +95,6 @@ function SettingItem({ icon, title, subtitle, onPress, rightElement, colors, des
   );
 }
 
-interface ThemeOptionProps {
-  icon: React.ReactNode;
-  label: string;
-  isSelected: boolean;
-  onPress: () => void;
-  colors: typeof Colors.light | typeof Colors.dark;
-}
-
-function ThemeOption({ icon, label, isSelected, onPress, colors }: ThemeOptionProps) {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.themeOption,
-        { 
-          backgroundColor: isSelected ? colors.accent + '20' : colors.surfaceSecondary,
-          borderColor: isSelected ? colors.accent : 'transparent',
-          borderWidth: 2
-        }
-      ]}
-      onPress={onPress}
-    >
-      {icon}
-      <Text style={[
-        styles.themeLabel,
-        { color: isSelected ? colors.accent : colors.text }
-      ]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
 export default function SettingsScreen() {
   const { 
     savedBluetoothDevice, 
@@ -142,20 +106,15 @@ export default function SettingsScreen() {
     permissionStatuses,
     refreshPermissionStatuses,
     requestNotificationAccess,
-    offlineParkingZones,
-    addOfflineParkingZone,
-    updateOfflineParkingZone,
-    removeOfflineParkingZone,
     quickNavigationPresets,
     removeQuickNavigationPreset,
     setNavigationTarget,
   } = useParking();
-  const { isDark, theme, setTheme } = useTheme();
+  const { isDark } = useTheme();
   const { showDestructive, showError, showConfirm } = useDialog();
   const colors = isDark ? Colors.dark : Colors.light;
   
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [zoneName, setZoneName] = useState('');
   const [isBluetoothModalVisible, setIsBluetoothModalVisible] = useState(false);
   const [shouldShowSkippedPrompt, setShouldShowSkippedPrompt] = useState(false);
   const [monitorRuntime, setMonitorRuntime] = useState<BluetoothMonitorRuntime | null>(null);
@@ -294,27 +253,16 @@ export default function SettingsScreen() {
     }
   }, [colors]);
 
-  const handleImportZone = useCallback(async () => {
-    if (!zoneName.trim()) return;
-    const baseLatitude = 37.7749 + Math.random() * 0.01;
-    const baseLongitude = -122.4194 + Math.random() * 0.01;
-    await addOfflineParkingZone({
-      name: zoneName.trim(),
-      polygon: [
-        { latitude: baseLatitude, longitude: baseLongitude },
-        { latitude: baseLatitude + 0.0015, longitude: baseLongitude },
-        { latitude: baseLatitude + 0.0015, longitude: baseLongitude + 0.0015 },
-        { latitude: baseLatitude, longitude: baseLongitude + 0.0015 },
-      ],
-      center: { latitude: baseLatitude + 0.00075, longitude: baseLongitude + 0.00075 },
-      zoneType: 'garage',
-      cacheStatus: 'cached',
-      source: 'imported',
-    });
-    setZoneName('');
-  }, [addOfflineParkingZone, zoneName]);
-
   const locationStatus: PermissionBadgeStatus = permissionStatuses.location.foreground;
+  const safeTotalParkings = Math.max(parkingStats.totalParkings, 0);
+  const levelFromXp = Math.floor(Math.sqrt(safeTotalParkings / 3)) + 1;
+  const currentLevelThreshold = Math.pow(levelFromXp - 1, 2) * 3;
+  const nextLevelThreshold = Math.pow(levelFromXp, 2) * 3;
+  const levelProgress = Math.min(
+    1,
+    Math.max(0, (safeTotalParkings - currentLevelThreshold) / Math.max(nextLevelThreshold - currentLevelThreshold, 1)),
+  );
+  const weeklyConsistency = Math.min(100, Math.round((parkingStats.lastWeekParkings / 7) * 100));
 
   const formatTimestamp = useCallback((timestamp: number | null | undefined) => {
     if (!timestamp) return '—';
@@ -403,7 +351,7 @@ export default function SettingsScreen() {
         }}>
           {/* Stats Card */}
           {parkingStats.totalParkings > 0 && (
-            <View style={[styles.statsCard, { backgroundColor: colors.card }]}>
+            <View style={[styles.statsCard, { backgroundColor: colors.card, borderColor: colors.borderLight ?? colors.border }]}>
               <LinearGradient
                 colors={colors.accentGradient}
                 style={styles.statsGradient}
@@ -431,34 +379,24 @@ export default function SettingsScreen() {
             </View>
           )}
 
-          {/* Appearance Section */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>APPEARANCE</Text>
-            
-            <AppCard colors={colors} style={styles.themeSelector} elevated="none">
-              <Text style={[styles.themeSelectorTitle, { color: colors.text }]}>Theme</Text>
-              <View style={styles.themeOptions}>
-                <ThemeOption
-                  icon={<Sun size={20} color={theme === 'light' ? colors.accent : colors.textMuted} />}
-                  label="Light"
-                  isSelected={theme === 'light'}
-                  onPress={() => setTheme('light')}
-                  colors={colors}
-                />
-                <ThemeOption
-                  icon={<Moon size={20} color={theme === 'dark' ? colors.accent : colors.textMuted} />}
-                  label="Dark"
-                  isSelected={theme === 'dark'}
-                  onPress={() => setTheme('dark')}
-                  colors={colors}
-                />
-                <ThemeOption
-                  icon={<Smartphone size={20} color={theme === 'system' ? colors.accent : colors.textMuted} />}
-                  label="Auto"
-                  isSelected={theme === 'system'}
-                  onPress={() => setTheme('system')}
-                  colors={colors}
-                />
+            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>DRIVER LEVEL</Text>
+            <AppCard colors={colors} style={styles.levelCard} elevated="none">
+              <View style={styles.levelHeader}>
+                <View style={[styles.levelBadge, { backgroundColor: colors.accent + '20', borderColor: colors.border }]}>
+                  <Award size={16} color={colors.accent} />
+                  <Text style={[styles.levelBadgeText, { color: colors.text }]}>Level {levelFromXp}</Text>
+                </View>
+                <Text style={[styles.levelXpText, { color: colors.textMuted }]}>
+                  {safeTotalParkings} XP • {nextLevelThreshold - safeTotalParkings} to next level
+                </Text>
+              </View>
+              <View style={[styles.levelProgressTrack, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+                <View style={[styles.levelProgressFill, { backgroundColor: colors.accent, width: `${Math.round(levelProgress * 100)}%` }]} />
+              </View>
+              <View style={styles.levelMetaRow}>
+                <Text style={[styles.levelMetaText, { color: colors.textSecondary }]}>Weekly consistency</Text>
+                <Text style={[styles.levelMetaText, { color: colors.text }]}>{weeklyConsistency}%</Text>
               </View>
             </AppCard>
           </View>
@@ -631,38 +569,6 @@ export default function SettingsScreen() {
             />
           </View>
 
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>OFFLINE PARKING ZONES</Text>
-            <AppCard colors={colors} elevated="none" style={styles.zoneComposer}>
-              <TextInput
-                value={zoneName}
-                onChangeText={setZoneName}
-                placeholder="Zone name (e.g., Downtown Garage)"
-                placeholderTextColor={colors.textMuted}
-                style={[styles.zoneInput, { color: colors.text, borderColor: colors.border }]}
-              />
-              <TouchableOpacity style={[styles.zoneActionButton, { backgroundColor: colors.accent }]} onPress={() => void handleImportZone()}>
-                <Text style={[styles.zoneActionLabel, { color: colors.textOnAccent }]}>Import + Cache</Text>
-              </TouchableOpacity>
-            </AppCard>
-            {offlineParkingZones.map((zone) => (
-              <AppCard key={zone.id} colors={colors} elevated="none" style={styles.zoneRow}>
-                <View style={styles.zoneRowMain}>
-                  <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>{zone.name}</Text>
-                  <Text style={[styles.itemSubtitle, { color: colors.textMuted }]}>Cache: {zone.cacheStatus}</Text>
-                </View>
-                <View style={styles.zoneActions}>
-                  <TouchableOpacity onPress={() => void updateOfflineParkingZone(zone.id, { cacheStatus: zone.cacheStatus === 'cached' ? 'stale' : 'cached' })}>
-                    <Text style={[styles.zoneLink, { color: colors.accent }]}>{zone.cacheStatus === 'cached' ? 'Mark stale' : 'Mark cached'}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => void removeOfflineParkingZone(zone.id)}>
-                    <Text style={[styles.zoneLink, { color: colors.error }]}>Remove</Text>
-                  </TouchableOpacity>
-                </View>
-              </AppCard>
-            ))}
-          </View>
-
           {quickNavigationPresets.length > 0 ? (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>QUICK PRESETS</Text>
@@ -803,6 +709,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     marginBottom: 24,
     overflow: 'hidden',
+    borderWidth: 1,
   },
   statsGradient: {
     flexDirection: 'row',
@@ -839,31 +746,38 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     textTransform: 'uppercase',
   },
-  zoneComposer: {
-    padding: 12,
-    borderRadius: 14,
+  levelCard: {
+    borderRadius: 16,
+    padding: 14,
     gap: 10,
   },
-  zoneInput: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 14,
-  },
-  zoneActionButton: {
-    borderRadius: 10,
-    paddingVertical: 10,
+  levelHeader: { gap: 6 },
+  levelBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
-  zoneActionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
+  levelBadgeText: { fontSize: 13, fontWeight: '700' },
+  levelXpText: { fontSize: 12, fontWeight: '600' },
+  levelProgressTrack: {
+    height: 10,
+    borderRadius: 999,
+    overflow: 'hidden',
+    borderWidth: 1,
   },
+  levelProgressFill: { height: '100%', borderRadius: 999 },
+  levelMetaRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  levelMetaText: { fontSize: 12, fontWeight: '600' },
   zoneRow: {
     marginTop: 8,
     borderRadius: 14,
     padding: 12,
+    borderWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -880,35 +794,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  themeSelector: {
-    padding: 16,
-    borderRadius: 20,
-  },
-  themeSelectorTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  themeOptions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  themeOption: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 14,
-    gap: 6,
-  },
-  themeLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
     borderRadius: 16,
+    borderWidth: 1,
     marginBottom: 8,
   },
   iconContainer: {
@@ -937,6 +828,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 14,
     borderRadius: 16,
+    borderWidth: 1,
     marginBottom: 8,
   },
   switchLeft: {

@@ -86,14 +86,14 @@ export default function ParkingHistoryDetailScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.topRow}>
-          <TouchableOpacity style={[styles.iconButton, { backgroundColor: colors.surfaceSecondary }]} onPress={() => router.back()}>
+          <TouchableOpacity style={[styles.iconButton, { backgroundColor: colors.surfaceSecondary, borderColor: colors.borderLight ?? colors.border }]} onPress={() => router.back()}>
             <ArrowLeft size={18} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.screenTitle, { color: colors.text }]}>Parking Details</Text>
           <View style={styles.placeholder} />
         </View>
 
-        <LinearGradient colors={[colors.accent + '26', colors.surfaceSecondary]} style={styles.heroCard}>
+        <LinearGradient colors={[colors.accent + '26', colors.surfaceSecondary]} style={[styles.heroCard, { borderColor: colors.borderLight ?? colors.border }]}>
           <View style={styles.heroHeader}>
             <Car size={18} color={colors.accent} />
             <Text style={[styles.heroTitle, { color: colors.text }]}>
@@ -152,7 +152,7 @@ export default function ParkingHistoryDetailScreen() {
           {spot.notes ? <Text style={[styles.detailText, { color: colors.text }]}>Notes: {spot.notes}</Text> : null}
         </View>
 
-        <TouchableOpacity style={[styles.ctaButton, { backgroundColor: colors.accent }]} onPress={openExternalMaps}>
+        <TouchableOpacity style={[styles.ctaButton, { backgroundColor: colors.accent, borderColor: colors.borderLight ?? colors.border }]} onPress={openExternalMaps}>
           <Navigation size={16} color="#FFFFFF" />
           <Text style={styles.ctaText}>Open in Maps</Text>
         </TouchableOpacity>
@@ -165,10 +165,10 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 36, gap: 14 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  iconButton: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  iconButton: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   screenTitle: { fontSize: 20, fontWeight: '700' },
   placeholder: { width: 40 },
-  heroCard: { borderRadius: 20, padding: 16, gap: 6 },
+  heroCard: { borderRadius: 20, padding: 16, gap: 6, borderWidth: 1 },
   heroHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   heroTitle: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },
   heroAddress: { fontSize: 22, fontWeight: '800' },
@@ -183,6 +183,7 @@ const styles = StyleSheet.create({
   detailRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   detailText: { fontSize: 14, fontWeight: '500' },
   ctaButton: {
+    borderWidth: 1,
     borderRadius: 14,
     minHeight: 50,
     alignItems: 'center',

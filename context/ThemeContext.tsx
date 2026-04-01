@@ -1,9 +1,8 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useColorScheme } from 'react-native';
 
-type ThemeMode = 'light' | 'dark' | 'system';
+type ThemeMode = 'light' | 'dark';
 
 interface ThemeContextType {
   theme: ThemeMode;
@@ -15,8 +14,7 @@ interface ThemeContextType {
 const STORAGE_KEY = '@parkping/theme';
 
 export const [ThemeProvider, useTheme] = createContextHook<ThemeContextType>(() => {
-  const systemColorScheme = useColorScheme();
-  const [theme, setThemeState] = useState<ThemeMode>('system');
+  const [theme, setThemeState] = useState<ThemeMode>('dark');
 
   useEffect(() => {
     void loadTheme();
@@ -25,8 +23,8 @@ export const [ThemeProvider, useTheme] = createContextHook<ThemeContextType>(() 
   const loadTheme = async () => {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setThemeState(stored as ThemeMode);
+      if (stored === 'light' || stored === 'dark') {
+        setThemeState(stored);
       }
     } catch (error) {
       console.error('Error loading theme:', error);
@@ -47,9 +45,7 @@ export const [ThemeProvider, useTheme] = createContextHook<ThemeContextType>(() 
     void setTheme(newTheme);
   }, [theme, setTheme]);
 
-  const isDark = theme === 'system' 
-    ? systemColorScheme === 'dark' 
-    : theme === 'dark';
+  const isDark = theme === 'dark';
 
   return useMemo(() => ({
     theme,
