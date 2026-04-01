@@ -114,6 +114,11 @@ function createParkingSpotId() {
   return `park-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function prependUniqueParking(spot: ParkingSpot, history: ParkingSpot[]) {
+  const dedupedHistory = history.filter((item) => !(item.id === spot.id && item.timestamp === spot.timestamp));
+  return [spot, ...dedupedHistory].slice(0, 50);
+}
+
 function parseStoredValue<T>(raw: string | null, guard: (value: unknown) => value is T, fallback: T): T {
   if (!raw) return fallback;
   try {
@@ -494,7 +499,7 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
       };
 
       if (currentParking) {
-        const updatedHistory = [currentParking, ...parkingHistory].slice(0, 50);
+        const updatedHistory = prependUniqueParking(currentParking, parkingHistory);
         setParkingHistory(updatedHistory);
         await AsyncStorage.setItem(STORAGE_KEYS.parkingHistory, JSON.stringify(updatedHistory));
       }
@@ -548,7 +553,7 @@ export const [ParkingProvider, useParking] = createContextHook<ParkingContextTyp
     if (!currentParking) return;
 
     try {
-      const updatedHistory = [currentParking, ...parkingHistory].slice(0, 50);
+      const updatedHistory = prependUniqueParking(currentParking, parkingHistory);
       setParkingHistory(updatedHistory);
       await Promise.all([
         AsyncStorage.setItem(STORAGE_KEYS.parkingHistory, JSON.stringify(updatedHistory)),

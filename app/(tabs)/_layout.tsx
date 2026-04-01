@@ -61,20 +61,20 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   const containerStyle = useMemo<ViewStyle>(
     () => ({
-      paddingBottom: Math.max(insets.bottom, spacing.xs),
-      backgroundColor: isDark ? "rgba(2,6,23,0.94)" : "rgba(255,255,255,0.97)",
+      paddingBottom: Math.max(insets.bottom - 2, 0),
+      backgroundColor: "transparent",
     }),
-    [insets.bottom, isDark]
+    [insets.bottom]
   );
 
   return (
     <View style={[styles.outerContainer, containerStyle]} pointerEvents="box-none">
-      <BlurView intensity={isDark ? 38 : 55} tint={isDark ? "dark" : "light"} style={styles.blurShell}>
+      <BlurView intensity={isDark ? 44 : 58} tint={isDark ? "dark" : "light"} style={styles.blurShell}>
         <LinearGradient
           colors={
             isDark
-              ? ["rgba(17,24,39,0.88)", "rgba(15,23,42,0.7)"]
-              : ["rgba(255,255,255,0.92)", "rgba(248,250,252,0.8)"]
+              ? ["rgba(10,18,34,0.96)", "rgba(16,23,41,0.88)"]
+              : ["rgba(255,255,255,0.94)", "rgba(241,245,249,0.9)"]
           }
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -134,8 +134,8 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
                   style={[
                     styles.activePill,
                     {
-                      backgroundColor: isDark ? "rgba(99,102,241,0.26)" : "rgba(79,70,229,0.14)",
-                      borderColor: isDark ? "rgba(129,140,248,0.45)" : "rgba(99,102,241,0.28)",
+                      backgroundColor: isDark ? "rgba(56,189,248,0.22)" : "rgba(14,165,233,0.14)",
+                      borderColor: isDark ? "rgba(56,189,248,0.4)" : "rgba(14,165,233,0.26)",
                       opacity: tabAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
                       transform: [
                         {
@@ -159,9 +159,9 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
                   }}
                 >
                   <Icon
-                    color={isFocused ? colors.accent : colors.textMuted}
-                    size={21}
-                    strokeWidth={isFocused ? 2.55 : 2.1}
+                    color={isFocused ? "#38BDF8" : colors.textMuted}
+                    size={20}
+                    strokeWidth={isFocused ? 2.5 : 2}
                   />
                 </Animated.View>
 
@@ -183,7 +183,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
                   style={[
                     styles.tabLabel,
                     {
-                      color: isFocused ? colors.text : colors.textMuted,
+                      color: isFocused ? (isDark ? "#E2F3FF" : "#0F172A") : colors.textMuted,
                       opacity: tabAnim.interpolate({ inputRange: [0, 1], outputRange: [0.72, 1] }),
                       transform: [
                         {
@@ -252,16 +252,16 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   blurShell: {
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    marginHorizontal: spacing.sm,
+    marginBottom: spacing.xs,
+    borderRadius: radius.xl,
     overflow: "hidden",
   },
   gradientShell: {
-    minHeight: 84,
-    paddingHorizontal: spacing.sm,
-    paddingTop: spacing.xs,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    minHeight: 70,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xxs,
+    borderRadius: radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     alignItems: "center",
@@ -271,9 +271,9 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     flex: 1,
-    minHeight: 52,
+    minHeight: 44,
     paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs,
+    paddingVertical: 6,
     borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
@@ -292,11 +292,11 @@ const styles = StyleSheet.create({
   },
   contextBadge: {
     position: "absolute",
-    top: 2,
-    right: 12,
-    minHeight: 18,
+    top: 0,
+    right: 10,
+    minHeight: 16,
     borderRadius: radius.pill,
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
   },
   contextBadgeText: {
     color: "#FFFFFF",
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "700",
     letterSpacing: 0.2,
   },
