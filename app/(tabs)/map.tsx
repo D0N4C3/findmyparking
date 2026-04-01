@@ -42,6 +42,8 @@ import {
   Ellipsis,
   Volume2,
   Vibrate,
+  Gauge,
+  Compass,
 } from 'lucide-react-native';
 
 type RouteErrorKind = 'network_timeout' | 'no_route' | 'api_error';
@@ -103,10 +105,10 @@ function calculateBearing(from: Coordinates, to: Coordinates): number {
 function getSimpleDirectionCue(relativeBearing: number): string {
   const normalized = ((relativeBearing + 540) % 360) - 180;
   const abs = Math.abs(normalized);
-  if (abs <= 20) return '⬆️ Walk straight';
-  if (abs <= 50) return normalized < 0 ? '↖ Slight left' : '↗ Slight right';
-  if (abs <= 120) return normalized < 0 ? '⬅️ Turn left' : '➡️ Turn right';
-  return '↩️ Turn around';
+  if (abs <= 20) return 'Walk straight';
+  if (abs <= 50) return normalized < 0 ? 'Slight left' : 'Slight right';
+  if (abs <= 120) return normalized < 0 ? 'Turn left' : 'Turn right';
+  return 'Turn around';
 }
 
 function decodePolyline(encoded: string): Coordinates[] {
@@ -355,20 +357,20 @@ export default function MapScreen() {
   }, [liveDistanceMeters, walkingTime]);
   const heading = currentLocation?.coords.heading ?? null;
   const directionCue = useMemo(() => {
-    if (!currentLocation || !resolvedNavigationTarget) return '⬆️ Start navigation';
+    if (!currentLocation || !resolvedNavigationTarget) return 'Start navigation';
     const bearing = calculateBearing(
       { latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude },
       { latitude: resolvedNavigationTarget.latitude, longitude: resolvedNavigationTarget.longitude },
     );
-    if (heading == null || heading < 0) return '⬆️ Walk toward your car';
+    if (heading == null || heading < 0) return 'Walk toward your car';
     return getSimpleDirectionCue(bearing - heading);
   }, [currentLocation, heading, resolvedNavigationTarget]);
   const gpsAccuracyText = useMemo(() => {
     const accuracy = currentLocation?.coords.accuracy;
-    if (accuracy == null) return '📶 Accuracy: Unknown';
-    if (accuracy <= 12) return '📶 Accuracy: High';
-    if (accuracy <= 30) return '📶 Accuracy: Medium';
-    return '📶 Low GPS accuracy — move slightly';
+    if (accuracy == null) return 'GPS accuracy: Unknown';
+    if (accuracy <= 12) return 'GPS accuracy: High';
+    if (accuracy <= 30) return 'GPS accuracy: Medium';
+    return 'GPS accuracy: Low — move slightly';
   }, [currentLocation?.coords.accuracy]);
 
   const buildNavigation = useCallback(async (options?: { silent?: boolean }) => {
@@ -534,11 +536,11 @@ export default function MapScreen() {
   const isSheetExpanded = sheetState === 'expanded';
   const proximityMessage =
     proximityStage === 'arrived'
-      ? '🎉 Your car is nearby!'
+      ? 'Your car is nearby.'
       : proximityStage === 'close'
         ? 'Car marker pulsing — almost there'
         : proximityStage === 'near'
-          ? "You're getting close 👀"
+          ? "You're getting close."
           : null;
   const cycleSheetState = useCallback(() => {
     setSheetState((prev) => (prev === 'hidden' ? 'collapsed' : prev === 'collapsed' ? 'expanded' : 'collapsed'));
@@ -663,12 +665,18 @@ export default function MapScreen() {
       <View style={[styles.mapOverlay, { paddingTop: insets.top + 8 }]}>
         <View style={styles.headerRow}>
           <View style={styles.infoCard}>
-            <Text style={styles.infoCardTitle}>🚗 Your Car</Text>
+            <View style={styles.infoCardTitleRow}>
+              <Car size={14} color="#FFFFFF" />
+              <Text style={styles.infoCardTitle}>Your Car</Text>
+            </View>
             <Text style={styles.infoCardStat}>
               Distance: {formatDistance(liveDistanceMeters ?? distance)} · ETA: {formatEta(liveEtaMinutes)}
             </Text>
             {proximityMessage ? <Text style={styles.proximityHint}>{proximityMessage}</Text> : null}
-            <Text style={styles.accuracyHint}>{gpsAccuracyText}</Text>
+            <View style={styles.metaRow}>
+              <Gauge size={12} color="rgba(255,255,255,0.74)" />
+              <Text style={styles.accuracyHint}>{gpsAccuracyText}</Text>
+            </View>
           </View>
 
           <TouchableOpacity style={styles.iconAction} onPress={() => void shareParking()}>
@@ -677,6 +685,7 @@ export default function MapScreen() {
         </View>
 
         <View style={styles.directionCard}>
+          <Compass size={13} color="#dbeafe" />
           <Text style={styles.directionCue}>{directionCue}</Text>
         </View>
 
@@ -886,8 +895,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
     borderRadius: 16,
-    backgroundColor: 'rgba(17,24,39,0.72)',
+    backgroundColor: 'rgba(10,18,32,0.78)',
     maxWidth: '86%',
+  },
+  infoCardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   infoCardTitle: {
     color: '#fff',
@@ -901,10 +915,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   accuracyHint: {
-    marginTop: 4,
     color: 'rgba(255,255,255,0.75)',
     fontSize: 11,
     fontWeight: '500',
+  },
+  metaRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   proximityHint: {
     marginTop: 5,
@@ -915,15 +934,18 @@ const styles = StyleSheet.create({
   directionCard: {
     alignSelf: 'center',
     marginBottom: 172,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     paddingHorizontal: 18,
-    paddingVertical: 11,
+    paddingVertical: 10,
     borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(4,11,25,0.62)',
   },
   directionCue: {
     color: '#fff',
-    fontSize: 26,
-    fontWeight: '800',
+    fontSize: 20,
+    fontWeight: '700',
   },
   iconAction: {
     width: 42,
