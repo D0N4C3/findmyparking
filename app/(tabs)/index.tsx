@@ -21,13 +21,11 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
-import * as Location from 'expo-location';
-import { AppButton } from '@/components/ui/primitives';
+import { AppButton, AppPrimaryButton } from '@/components/ui/primitives';
 import { useDialog } from '@/context/DialogContext';
 import { DIALOG_COPY } from '@/constants/dialogs';
 import { HomeHeader } from '@/features/home/components/HomeHeader';
 import { ActiveParkingCard } from '@/features/home/components/ActiveParkingCard';
-import { PrimaryActionBar } from '@/features/home/components/PrimaryActionBar';
 import { SecondaryActionGrid } from '@/features/home/components/SecondaryActionGrid';
 import { StatsSummaryCard } from '@/features/home/components/StatsSummaryCard';
 import { HomeViewModel } from '@/features/home/home-view-model';
@@ -276,11 +274,6 @@ export default function HomeScreen() {
     router.push('/map');
   }, [quickNavigationPresets, router, setNavigationTarget]);
 
-  const handleOpenHistory = useCallback(() => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/history');
-  }, [router]);
-
   const handleOpenExternalMaps = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!currentParking) return;
@@ -309,42 +302,6 @@ export default function HomeScreen() {
       showError(DIALOG_COPY.errors.shareLocation.title, DIALOG_COPY.errors.shareLocation.message);
     }
   }, [currentParking, showError]);
-
-  const handleUpdateLocation = useCallback(async () => {
-    if (!currentParking) return;
-
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try {
-      const { status } = await Location.getForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        showError(DIALOG_COPY.permissions.savePermissionRequired.title, DIALOG_COPY.permissions.savePermissionRequired.message);
-        return;
-      }
-
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      let address = currentParking.address;
-
-      try {
-        const [geocode] = await Location.reverseGeocodeAsync({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
-        if (geocode) {
-          address = [geocode.name, geocode.street, geocode.city].filter(Boolean).join(', ');
-        }
-      } catch {
-        // keep existing address when reverse geocode fails
-      }
-
-      await updateParkingSpot(currentParking.id, {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        address,
-      });
-    } catch {
-      showError(DIALOG_COPY.errors.saveParking.title, DIALOG_COPY.errors.saveParking.message);
-    }
-  }, [currentParking, showError, updateParkingSpot]);
 
   const handleSetTimer = useCallback((minutes: number) => {
     setParkingTimer(minutes);
@@ -408,7 +365,7 @@ export default function HomeScreen() {
 
       <ScrollView style={styles.scrollView} contentContainerStyle={[styles.scrollContent, { paddingBottom: 124 + insets.bottom }]} showsVerticalScrollIndicator={false}>
         <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }] }]}> 
-          <Text style={[styles.sectionTitle, styles.sectionTitleResponsive, isCompact && styles.sectionTitleCompact, isExpanded && styles.sectionTitleExpanded, { color: colors.text }]}>I parked · help me return quickly</Text>
+          <Text style={[styles.sectionTitle, styles.sectionTitleResponsive, isCompact && styles.sectionTitleCompact, isExpanded && styles.sectionTitleExpanded, { color: colors.text }]}>Where is my car and what should I do next?</Text>
           {showBluetoothSetupPrompt ? (
             <TouchableOpacity style={[styles.setupPrompt, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push('/settings')}>
               <Text style={[styles.setupPromptTitle, { color: colors.text }]}>Finish car Bluetooth setup</Text>
@@ -418,18 +375,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           ) : null}
           <ActiveParkingCard viewModel={viewModel} onClearTimer={clearParkingTimer} breakpoint={breakpoint} />
-        </Animated.View>
-
-        <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [32, 0] }) }] }]}>
-          <Text style={[styles.sectionTitle, styles.sectionTitleResponsive, isCompact && styles.sectionTitleCompact, isExpanded && styles.sectionTitleExpanded, { color: colors.text }]}>Quick actions</Text>
-          <PrimaryActionBar
-            viewModel={viewModel}
-            onSaveParking={handleSaveParking}
-            onNavigateExternal={handleOpenExternalMaps}
-            onUpdateLocation={handleUpdateLocation}
-            onOpenHistory={handleOpenHistory}
-            breakpoint={breakpoint}
-          />
         </Animated.View>
 
         {quickNavigationPresets.length > 0 ? (
@@ -451,7 +396,7 @@ export default function HomeScreen() {
 
         {currentParking && (
           <Animated.View style={[styles.section, { transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }]}>
-            <Text style={[styles.sectionTitle, styles.sectionTitleResponsive, isCompact && styles.sectionTitleCompact, isExpanded && styles.sectionTitleExpanded, { color: colors.text }]}>Extras</Text>
+            <Text style={[styles.sectionTitle, styles.sectionTitleResponsive, isCompact && styles.sectionTitleCompact, isExpanded && styles.sectionTitleExpanded, { color: colors.text }]}>Secondary actions</Text>
             <SecondaryActionGrid
               viewModel={viewModel}
               onShare={handleShareLocation}
@@ -471,6 +416,16 @@ export default function HomeScreen() {
           </Animated.View>
         )}
       </ScrollView>
+
+
+      <Animated.View style={[styles.stickyCtaWrap, { paddingBottom: insets.bottom + 10, backgroundColor: colors.background, borderTopColor: colors.border, transform: [{ scale: pulseAnim }] }]}> 
+        <AppPrimaryButton
+          colors={colors}
+          label={currentParking ? 'Navigate to Car' : 'Save Parking Location'}
+          onPress={currentParking ? handleOpenExternalMaps : () => void handleSaveParking()}
+          style={styles.stickyCtaButton}
+        />
+      </Animated.View>
 
       <TimerModal visible={timerModalVisible} onClose={() => setTimerModalVisible(false)} onSetTimer={handleSetTimer} colors={colors} />
 
@@ -550,6 +505,15 @@ const styles = StyleSheet.create({
   sectionTitleExpanded: {
     fontSize: 20,
     lineHeight: 26,
+  },
+  stickyCtaWrap: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  stickyCtaButton: {
+    minHeight: 58,
+    borderRadius: 18,
   },
   modalOverlay: {
     flex: 1,
