@@ -194,6 +194,7 @@ export default function MapScreen() {
   const [voiceGuidanceEnabled, setVoiceGuidanceEnabled] = useState(false);
   const [flashlightEnabled, setFlashlightEnabled] = useState(false);
   const [proximityStage, setProximityStage] = useState<ProximityStage>('none');
+  const lastRouteRefreshRef = useRef<{ latitude: number; longitude: number; at: number } | null>(null);
 
   const distance = getDistanceToCar();
   const walkingTime = getWalkingTimeToCar();
@@ -370,14 +371,18 @@ export default function MapScreen() {
     return '📶 Low GPS accuracy — move slightly';
   }, [currentLocation?.coords.accuracy]);
 
-  const buildNavigation = useCallback(async () => {
+  const buildNavigation = useCallback(async (options?: { silent?: boolean }) => {
     if (!resolvedNavigationTarget) {
-      showError(DIALOG_COPY.prompts.noParkingSaved.title, DIALOG_COPY.prompts.noParkingSaved.message);
+      if (!options?.silent) {
+        showError(DIALOG_COPY.prompts.noParkingSaved.title, DIALOG_COPY.prompts.noParkingSaved.message);
+      }
       return;
     }
 
     if (!currentLocation) {
-      showError(DIALOG_COPY.prompts.locationUnavailableForNavigation.title, DIALOG_COPY.prompts.locationUnavailableForNavigation.message);
+      if (!options?.silent) {
+        showError(DIALOG_COPY.prompts.locationUnavailableForNavigation.title, DIALOG_COPY.prompts.locationUnavailableForNavigation.message);
+      }
       return;
     }
 
@@ -391,6 +396,11 @@ export default function MapScreen() {
         latitude: resolvedNavigationTarget.latitude,
         longitude: resolvedNavigationTarget.longitude,
       });
+      lastRouteRefreshRef.current = {
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+        at: Date.now(),
+      };
 
       setRouteCoordinates(next.coordinates);
       console.info('[MapScreen] navigation_build_success', {
@@ -418,6 +428,9 @@ export default function MapScreen() {
         { latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude },
         { latitude: resolvedNavigationTarget.latitude, longitude: resolvedNavigationTarget.longitude },
       ]);
+      if (options?.silent) {
+        return;
+      }
       if (errorKind === 'network_timeout') {
         showError('Routing timed out', 'Network timeout while building route. Direct guidance mode is active.');
       } else if (errorKind === 'no_route') {
@@ -562,6 +575,24 @@ export default function MapScreen() {
       450,
     );
   }, [currentLocation, liveDistanceMeters]);
+
+  useEffect(() => {
+    if (!currentLocation || !resolvedNavigationTarget) return;
+    if (isLoadingRoute) return;
+
+    const lastRefresh = lastRouteRefreshRef.current;
+    const now = Date.now();
+    if (!lastRefresh) return;
+
+    const movedMeters = distanceBetween(
+      { latitude: currentLocation.coords.latitude, longitude: currentLocation.coords.longitude },
+      { latitude: lastRefresh.latitude, longitude: lastRefresh.longitude },
+    );
+    const elapsedMs = now - lastRefresh.at;
+
+    if (movedMeters < 8 && elapsedMs < 12000) return;
+    void buildNavigation({ silent: true });
+  }, [buildNavigation, currentLocation, isLoadingRoute, resolvedNavigationTarget]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>

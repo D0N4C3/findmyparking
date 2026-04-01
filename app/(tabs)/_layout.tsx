@@ -61,7 +61,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   const containerStyle = useMemo<ViewStyle>(
     () => ({
-      paddingBottom: Math.max(insets.bottom - 2, 0),
+      paddingBottom: Math.max(insets.bottom, 0),
       backgroundColor: "transparent",
     }),
     [insets.bottom]
@@ -134,8 +134,8 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
                   style={[
                     styles.activePill,
                     {
-                      backgroundColor: isDark ? "rgba(56,189,248,0.22)" : "rgba(14,165,233,0.14)",
-                      borderColor: isDark ? "rgba(56,189,248,0.4)" : "rgba(14,165,233,0.26)",
+                      backgroundColor: isDark ? "rgba(59,130,246,0.24)" : "rgba(37,99,235,0.15)",
+                      borderColor: isDark ? "rgba(96,165,250,0.46)" : "rgba(37,99,235,0.34)",
                       opacity: tabAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
                       transform: [
                         {
@@ -159,7 +159,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
                   }}
                 >
                   <Icon
-                    color={isFocused ? "#38BDF8" : colors.textMuted}
+                    color={isFocused ? (isDark ? "#93C5FD" : "#1D4ED8") : colors.textMuted}
                     size={20}
                     strokeWidth={isFocused ? 2.5 : 2}
                   />
@@ -252,16 +252,19 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   blurShell: {
-    marginHorizontal: spacing.sm,
-    marginBottom: spacing.xs,
-    borderRadius: radius.xl,
+    marginHorizontal: 0,
+    marginBottom: 0,
+    borderRadius: 0,
     overflow: "hidden",
   },
   gradientShell: {
-    minHeight: 70,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xxs,
-    borderRadius: radius.xl,
+    minHeight: 62,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     alignItems: "center",
@@ -271,9 +274,9 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 42,
     paddingHorizontal: spacing.xs,
-    paddingVertical: 6,
+    paddingVertical: 4,
     borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
