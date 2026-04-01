@@ -26,6 +26,7 @@ export interface ParkingSpot {
   latitude: number;
   longitude: number;
   timestamp: number;
+  name?: string;
   bluetoothDeviceName?: string;
   photoUrl?: string;
   notes?: string;

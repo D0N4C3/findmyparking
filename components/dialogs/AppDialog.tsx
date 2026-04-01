@@ -76,10 +76,10 @@ const styles = StyleSheet.create({
   },
   dialog: {
     width: '100%',
-    maxWidth: 420,
+    maxWidth: 368,
     borderRadius: radius.hero,
-    borderWidth: 1,
-    padding: spacing.lg,
+    borderWidth: 0.8,
+    padding: spacing.md,
     gap: spacing.sm,
     ...elevation.md,
   },
