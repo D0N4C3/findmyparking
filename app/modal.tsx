@@ -16,31 +16,56 @@ const GAME_HEIGHT = 520;
 const PLAYER_SIZE = 24;
 const GRAVITY = 0.62;
 const JUMP_FORCE = -9.6;
-const BASE_OBSTACLE_SPEED = 2.8;
-const SPEED_RAMP_PER_SEC = 0.09;
+const BASE_OBSTACLE_SPEED = 2.2;
+const SPEED_RAMP_PER_SEC = 0.07;
 const BASE_SCORE_RATE = 8;
 const SCORE_RAMP_PER_SEC = 0.4;
-const GAP_HEIGHT = 140;
+const GAP_HEIGHT = 150;
 const OBSTACLE_WIDTH = 46;
 const PLAYER_X = 70;
+const OBSTACLE_SPACING = 210;
+const MIN_GAP_Y_DELTA = 90;
 
 type Obstacle = {
   x: number;
   gapY: number;
 };
 
+type GameState = {
+  score: number;
+  playerY: number;
+  obstacles: Obstacle[];
+};
+
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
+const createInitialObstacles = (): Obstacle[] => [
+  { x: GAME_WIDTH + 40, gapY: 190 },
+  { x: GAME_WIDTH + 40 + OBSTACLE_SPACING, gapY: 280 },
+];
+
+const nextGapY = (previousGapY: number) => {
+  const minGapY = 80;
+  const maxGapY = GAME_HEIGHT - GAP_HEIGHT - 80;
+  let candidate = clamp(90 + Math.random() * 260, minGapY, maxGapY);
+
+  if (Math.abs(candidate - previousGapY) < MIN_GAP_Y_DELTA) {
+    const direction = candidate >= previousGapY ? 1 : -1;
+    candidate = clamp(previousGapY + direction * MIN_GAP_Y_DELTA, minGapY, maxGapY);
+  }
+
+  return candidate;
+};
+
 export default function ModalScreen() {
   const [running, setRunning] = useState(false);
-  const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
-  const [playerY, setPlayerY] = useState(GAME_HEIGHT / 2);
-  const [obstacles, setObstacles] = useState<Obstacle[]>([
-    { x: GAME_WIDTH + 40, gapY: 180 },
-    { x: GAME_WIDTH + 220, gapY: 270 },
-  ]);
+  const [gameState, setGameState] = useState<GameState>({
+    score: 0,
+    playerY: GAME_HEIGHT / 2,
+    obstacles: createInitialObstacles(),
+  });
 
   const velocityRef = useRef(0);
   const elapsedRef = useRef(0);
@@ -54,18 +79,17 @@ export default function ModalScreen() {
     elapsedRef.current = 0;
     velocityRef.current = 0;
     previousTimestampRef.current = 0;
-    setScore(0);
-    setPlayerY(GAME_HEIGHT / 2);
-    setObstacles([
-      { x: GAME_WIDTH + 40, gapY: 180 },
-      { x: GAME_WIDTH + 220, gapY: 270 },
-    ]);
+    setGameState({
+      score: 0,
+      playerY: GAME_HEIGHT / 2,
+      obstacles: createInitialObstacles(),
+    });
   };
 
-  const endRun = useCallback(() => {
+  const endRun = useCallback((runScore: number) => {
     setRunning(false);
-    setBestScore((prev) => Math.max(prev, Math.floor(score)));
-  }, [score]);
+    setBestScore((prev) => Math.max(prev, Math.floor(runScore)));
+  }, []);
 
   const checkCollision = (nextY: number, nextObstacles: Obstacle[]) => {
     if (nextY <= 0 || nextY + PLAYER_SIZE >= GAME_HEIGHT) {
@@ -98,41 +122,47 @@ export default function ModalScreen() {
       elapsedRef.current += delta / 60;
       velocityRef.current += GRAVITY * delta;
 
-      setPlayerY((currentY) => {
-        const nextY = currentY + velocityRef.current * delta;
+      setGameState((currentState) => {
+        const nextY = currentState.playerY + velocityRef.current * delta;
+        const dynamicSpeed = BASE_OBSTACLE_SPEED + elapsedRef.current * SPEED_RAMP_PER_SEC;
 
-        setObstacles((currentObstacles) => {
-          const dynamicSpeed = BASE_OBSTACLE_SPEED + elapsedRef.current * SPEED_RAMP_PER_SEC;
-          const nextObstacles = currentObstacles
-            .map((obstacle) => ({ ...obstacle, x: obstacle.x - dynamicSpeed * delta }))
-            .map((obstacle, index) => {
-              if (obstacle.x + OBSTACLE_WIDTH > 0) return obstacle;
-              const prevObstacle = index === 0 ? currentObstacles[1] : currentObstacles[0];
-              return {
-                x: prevObstacle.x + 180,
-                gapY: clamp(90 + Math.random() * 260, 80, GAME_HEIGHT - GAP_HEIGHT - 80),
-              };
-            });
+        const movedObstacles = currentState.obstacles.map((obstacle) => ({
+          ...obstacle,
+          x: obstacle.x - dynamicSpeed * delta,
+        }));
 
-          if (checkCollision(nextY, nextObstacles)) {
-            endRun();
-            return currentObstacles;
-          }
+        const [first, second] = movedObstacles;
+        let nextObstacles = movedObstacles;
 
-          return nextObstacles;
-        });
-
-        if (nextY <= 0 || nextY + PLAYER_SIZE >= GAME_HEIGHT) {
-          endRun();
-          return currentY;
+        if (first.x + OBSTACLE_WIDTH <= 0) {
+          nextObstacles = [
+            {
+              x: second.x + OBSTACLE_SPACING,
+              gapY: nextGapY(second.gapY),
+            },
+            second,
+          ];
+        } else if (second.x + OBSTACLE_WIDTH <= 0) {
+          nextObstacles = [
+            first,
+            {
+              x: first.x + OBSTACLE_SPACING,
+              gapY: nextGapY(first.gapY),
+            },
+          ];
         }
 
-        return nextY;
-      });
+        if (checkCollision(nextY, nextObstacles)) {
+          endRun(currentState.score);
+          return currentState;
+        }
 
-      setScore((currentScore) => {
         const dynamicRate = BASE_SCORE_RATE + elapsedRef.current * SCORE_RAMP_PER_SEC;
-        return currentScore + (dynamicRate * delta) / 60;
+        return {
+          score: currentState.score + (dynamicRate * delta) / 60,
+          playerY: nextY,
+          obstacles: nextObstacles,
+        };
       });
 
       rafRef.current = requestAnimationFrame(update);
@@ -163,12 +193,12 @@ export default function ModalScreen() {
           <Text style={styles.subtitle}>Tap to flap • survive as speed ramps up</Text>
 
           <View style={styles.hudRow}>
-            <Text style={styles.hudText}>Score: {Math.floor(score)}</Text>
+            <Text style={styles.hudText}>Score: {Math.floor(gameState.score)}</Text>
             <Text style={styles.hudText}>Best: {bestScore}</Text>
           </View>
 
           <View style={styles.gameArea}>
-            {obstacles.map((obstacle, index) => (
+            {gameState.obstacles.map((obstacle, index) => (
               <View key={`pipe-${index}`}>
                 <View
                   style={[
@@ -193,7 +223,7 @@ export default function ModalScreen() {
               </View>
             ))}
 
-            <View style={[styles.player, { top: playerY, left: PLAYER_X }]} />
+            <View style={[styles.player, { top: gameState.playerY, left: PLAYER_X }]} />
 
             {!running && (
               <View style={styles.overlayMessage}>
